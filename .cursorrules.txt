@@ -1,0 +1,100 @@
+# .cursorrules — 原材料库存分析与处理协同平台
+
+## 项目简介
+
+这是一个内网 Web 应用，用于替代 Excel 实现原材料库存异常分析和跨部门协同处理。
+核心流程：SAP Excel 上传 → SQL Server 存储 → Web 端查看和填写处理信息 → Power BI 读取展示。
+
+## 核心技术约束
+
+- **后端**：Python 3.10+ / FastAPI / SQLAlchemy / pymssql
+- **前端**：HTML + Tailwind CSS + Alpine.js（不用 React/Vue，保持轻量）
+- **数据库**：SQL Server（地址 172.18.164.9），数据库名 rm_inventory_db
+- **认证**：JWT Token（python-jose + bcrypt）
+- **部署环境**：内网 Linux 服务器，端口 8080
+
+## 代码规范
+
+### Python
+- 遵循 PEP 8
+- 所有注释和文档字符串使用**中文**
+- 变量名和函数名使用英文 snake_case
+- 数据库字段名使用英文 snake_case
+- API 响应中涉及业务数据的字段用英文，但枚举值保留中文原值（如 action_status = "进行中"）
+- 类型注解必须完整（FastAPI 的 Pydantic 模型）
+- 异常处理要完善，API 返回统一的错误格式 `{"detail": "错误信息"}`
+
+### 前端
+- 界面语言：全中文
+- Tailwind 工具类直接写在 HTML 中
+- Alpine.js 处理交互逻辑
+- API 调用统一使用 fetch，封装一个带 JWT 的请求工具函数
+- 设计风格：简洁专业，浅色主题，卡片式布局
+
+### SQL
+- 表名使用 snake_case，前缀区分：rm_（业务表）、sys_（系统表）、v_（视图）
+- 中文内容字段使用 NVARCHAR
+- 所有表必须有 created_at 字段
+
+## 关键业务规则
+
+1. **批次编号是业务主键**，在同一个 snapshot_month 内全局唯一
+2. **快照表和处理表分离**：rm_inventory_snapshot（只读，上传时写入）+ rm_batch_actions（Web 端可写）
+3. **异常判定规则**：库龄 ∈ {C,D,E} OR 良品标记='N' OR 已冻结≠0 OR 质检>0 OR 呆滞原因非空
+4. **上传逻辑**：同月同类别重复上传时，覆盖快照数据但保留已有的处理记录
+5. **权限模型**：admin 可上传数据和管理用户，user 只能查看和填写处理记录
+6. **用户部门**：采购、质量、研发、生产、PPIC&仓库
+7. **工厂范围**：一期仅 3000（昆山一厂）和 3001（昆山二厂），3301（印尼）二期接入
+
+## 数据流
+
+```
+SAP Excel (3个文件: Paper/AL/PE)
+    ↓ 管理员上传
+Python 解析 → 合并 → 关联 Mapping → 计算异常标记
+    ↓ 
+SQL Server: rm_inventory_snapshot (只读快照)
+    ↓
+Web 前端展示 → 用户填写处理信息
+    ↓
+SQL Server: rm_batch_actions (回写)
+    ↓
+Power BI 读取 v_inventory_with_actions 视图
+```
+
+## 文件结构
+
+```
+rm-inventory-platform/
+├── backend/
+│   ├── main.py              # FastAPI 入口 + CORS + 静态文件挂载
+│   ├── config.py            # 环境变量配置
+│   ├── database.py          # SQLAlchemy 连接
+│   ├── models.py            # ORM 模型
+│   ├── schemas.py           # Pydantic 模型
+│   ├── auth.py              # JWT 认证
+│   ├── routers/             # API 路由（按模块拆分）
+│   ├── services/            # 业务逻辑层
+│   └── requirements.txt
+├── frontend/                # 静态 HTML 页面
+├── sql/                     # DDL 和初始化脚本
+├── .env                     # 敏感配置
+└── PRD.md                   # 完整需求文档（必读）
+```
+
+## 开发约定
+
+1. 开始任何功能前，先阅读 PRD.md 中对应章节
+2. 每个 API 路由文件对应 PRD 第5节的一个模块
+3. 前端每个页面对应 PRD 第6节的一个页面设计
+4. 数据库表结构严格按照 PRD 第3节的 DDL
+5. 枚举值严格按照 PRD 第2.3 节定义
+6. Excel 字段映射严格按照 PRD 第7.2 节的 COLUMN_MAPPING
+
+## 常见问题预判
+
+- **SQL Server 连接**：使用 pymssql，连接串格式 `mssql+pymssql://user:pass@172.18.164.9/rm_inventory_db`
+- **中文编码**：Excel 读取用 openpyxl 引擎，SQL 写入确保 NVARCHAR 类型
+- **日期处理**：SAP 导出的日期可能是 datetime 或 string 格式，需要做兼容处理
+- **前端认证**：JWT Token 存在 localStorage，每个请求在 Authorization header 中携带 `Bearer {token}`
+- **CORS**：开发时允许全部，部署时限制为内网 IP 段

@@ -1,0 +1,1082 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RM 库存分析与处理平台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', "PingFang SC", "Microsoft YaHei", sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+        }
+        .data-table-container {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            border-radius: 12px;
+            overflow: hidden;
+            background: white;
+        }
+        .data-table-wrapper {
+            overflow-x: auto;
+            position: relative;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 0.75rem;
+            table-layout: fixed;
+        }
+        .data-table th {
+            background: #f1f5f9;
+            padding: 10px 12px;
+            font-weight: 600;
+            text-align: left;
+            color: #475569;
+            border-bottom: 1px solid #e2e8f0;
+            border-right: 1px solid #e2e8f0;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .resizer {
+            position: absolute;
+            right: 0;
+            top: 0;
+            height: 100%;
+            width: 4px;
+            background: transparent;
+            cursor: col-resize;
+            z-index: 20;
+        }
+        .resizer:hover, .resizing .resizer {
+            background: #3b82f6;
+        }
+        
+        .data-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #f1f5f9;
+            border-right: 1px solid #f1f5f9;
+            transition: background 0.1s;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .data-table tr:hover td {
+            background: #f8fafc;
+        }
+        .data-table tr.editing td {
+            background: #eff6ff !important;
+        }
+        
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        
+        .age-A { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+        .age-B { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+        .age-C { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+        .age-D { background: #fff7ed; color: #ea580c; border: 1px solid #fed7aa; }
+        .age-E { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+
+        .risk-defective { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+        .risk-warn { background: #fff7ed; color: #ea580c; border: 1px solid #fed7aa; }
+        .risk-normal { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+
+        .action-col { background: #fffdf0; }
+        .data-table tr:hover .action-col { background: #fffbeb; }
+        .action-col-first { border-left: 2px solid #fbbf24 !important; }
+
+        .t-input {
+            width: 100%;
+            padding: 4px 8px;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            font-size: 11px;
+            background: white;
+        }
+        .t-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+        }
+        
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .login-bg {
+            background: linear-gradient(145deg, #0f172a, #1e293b, #0f172a);
+        }
+    </style>
+</head>
+<body>
+
+<div id="root">
+    <!-- ─── LOGIN VIEW ─── -->
+    <div id="login-view" class="login-bg min-h-screen flex items-center justify-center p-4">
+        <div class="w-full max-w-[400px] p-8 rounded-2xl bg-white/5 border border-white/10 shadow-2xl backdrop-blur-md">
+            <div class="text-center mb-8">
+                <div class="w-14 h-14 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl mx-auto flex items-center justify-center shadow-lg shadow-indigo-500/20 mb-4">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M22 8.35V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.35A2 2 0 0 1 3.26 6.5l8-3.2a2 2 0 0 1 1.48 0l8 3.2A2 2 0 0 1 22 8.35Z"/></svg>
+                </div>
+                <h1 class="text-xl font-bold text-white">原材料库存分析平台</h1>
+                <p class="text-slate-400 text-xs mt-2 uppercase tracking-wider">RM Inventory Analysis Platform</p>
+            </div>
+            <form id="login-form" class="space-y-5">
+                <div>
+                    <label class="block text-slate-400 text-xs font-medium mb-2">用户名</label>
+                    <input id="login-user" type="text" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-indigo-500 transition-colors" placeholder="请输入用户名" value="admin">
+                </div>
+                <div>
+                    <label class="block text-slate-400 text-xs font-medium mb-2">密码</label>
+                    <input id="login-pwd" type="password" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-indigo-500 transition-colors" placeholder="请输入密码" value="123456">
+                </div>
+                <button type="submit" class="w-full bg-gradient-to-r from-indigo-500 to-blue-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-indigo-500/25 hover:opacity-90 transition-opacity">登 录</button>
+            </form>
+            <p id="login-tip" class="text-red-400 text-xs mt-4 text-center min-h-[1rem]"></p>
+            <div class="mt-8 p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/10">
+                <p class="text-indigo-300 text-[11px] leading-relaxed">
+                    <span class="font-bold">演示账号：</span><br>
+                    管理员: admin / 123456<br>
+                    业务员: user / 123456
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── MAIN APP ─── -->
+    <main id="app" class="hidden min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="h-14 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-50">
+            <div class="flex items-center gap-8">
+                <div class="flex items-center gap-2 cursor-pointer">
+                    <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M22 8.35V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.35A2 2 0 0 1 3.26 6.5l8-3.2a2 2 0 0 1 1.48 0l8 3.2A2 2 0 0 1 22 8.35Z"/></svg>
+                    </div>
+                    <span class="font-bold text-slate-800 text-sm">RM Inventory</span>
+                </div>
+                <nav class="flex gap-1">
+                    <button id="nav-inventory" class="px-4 py-1.5 rounded-lg text-sm font-semibold bg-indigo-50 text-indigo-600">库存明细</button>
+                    <button id="nav-admin" class="px-4 py-1.5 rounded-lg text-sm font-medium text-slate-500 hover:bg-slate-50 hidden">管理员工具</button>
+                </nav>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="text-right">
+                    <div id="current-user-name" class="text-sm font-bold text-slate-800">-</div>
+                    <div id="current-user-dept" class="text-[10px] text-slate-400">-</div>
+                </div>
+                <button id="btn-logout" class="px-3 py-1.5 border border-slate-200 rounded-lg text-xs text-slate-500 hover:bg-slate-50">退出</button>
+            </div>
+        </header>
+
+        <!-- ─── PAGE: INVENTORY ─── -->
+        <div id="page-inventory" class="flex-1 p-6 max-w-[1800px] mx-auto w-full space-y-6">
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div class="bg-white p-4 rounded-2xl border border-slate-100 flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-lg flex-shrink-0">Σ</div>
+                    <div class="min-w-0">
+                        <p class="text-[11px] text-slate-400 font-medium">总批次</p>
+                        <p id="stat-total" class="text-xl font-extrabold text-slate-800">0</p>
+                        <p id="stat-total-w" class="text-[11px] text-slate-400 font-medium mt-0.5">— t</p>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-2xl border border-slate-100 flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center text-red-600 font-bold text-lg flex-shrink-0">✗</div>
+                    <div class="min-w-0">
+                        <p class="text-[11px] text-slate-400 font-medium">不良品</p>
+                        <p id="stat-defective" class="text-xl font-extrabold text-red-600">0</p>
+                        <p id="stat-defective-w" class="text-[11px] text-slate-400 font-medium mt-0.5">— t</p>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-2xl border border-slate-100 flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 font-bold text-lg flex-shrink-0">◷</div>
+                    <div class="min-w-0">
+                        <p class="text-[11px] text-slate-400 font-medium">待处理</p>
+                        <p id="stat-pending" class="text-xl font-extrabold text-amber-600">0</p>
+                        <p id="stat-pending-w" class="text-[11px] text-slate-400 font-medium mt-0.5">— t</p>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-2xl border border-slate-100 flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 font-bold text-lg flex-shrink-0">✓</div>
+                    <div class="min-w-0">
+                        <p class="text-[11px] text-slate-400 font-medium">已完成</p>
+                        <p id="stat-done" class="text-xl font-extrabold text-emerald-600">0</p>
+                        <p id="stat-done-w" class="text-[11px] text-slate-400 font-medium mt-0.5">— t</p>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-2xl border border-slate-100 flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-base flex-shrink-0">%</div>
+                    <div class="min-w-0">
+                        <p class="text-[11px] text-slate-400 font-medium">处理率</p>
+                        <p id="stat-rate" class="text-xl font-extrabold text-indigo-600">—</p>
+                        <p id="stat-rate-sub" class="text-[11px] text-slate-400 font-medium mt-0.5">已完成/不良品</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filter Bar -->
+            <div class="bg-white p-4 rounded-2xl border border-slate-100 space-y-4">
+                <div class="flex flex-wrap items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold text-slate-500">月份</span>
+                        <select id="month-select" class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-indigo-500"></select>
+                    </div>
+
+                    <div class="h-8 w-[1px] bg-slate-100"></div>
+
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold text-slate-500">工厂</span>
+                        <select id="plant-select" class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-indigo-500">
+                            <option value="">全部</option>
+                            <option value="KS">KS</option>
+                            <option value="IDN">IDN</option>
+                        </select>
+                    </div>
+                    
+                    <div class="h-8 w-[1px] bg-slate-100"></div>
+
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold text-slate-500">异常状态</span>
+                        <select id="abnormal-select" class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-indigo-500">
+                            <option value="">全部</option>
+                            <option value="true">异常</option>
+                            <option value="false">正常</option>
+                        </select>
+                    </div>
+
+                    <div class="h-8 w-[1px] bg-slate-100"></div>
+
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold text-slate-500">类型</span>
+                        <select id="rm-type-select" class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-indigo-500">
+                            <option value="">全部</option>
+                        </select>
+                    </div>
+
+                    <div class="h-8 w-[1px] bg-slate-100"></div>
+
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold text-slate-500">库龄</span>
+                        <select id="aging-select" class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-indigo-500">
+                            <option value="">全部</option>
+                            <option value="A">A · 0–30天</option>
+                            <option value="B">B · 31–90天</option>
+                            <option value="C">C · 91–180天</option>
+                            <option value="D">D · 181–365天</option>
+                            <option value="E">E · &gt;365天</option>
+                        </select>
+                    </div>
+
+                    <div class="flex-1 min-w-[240px] relative">
+                        <div class="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                        </div>
+                        <input id="keyword" type="text" class="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-8 py-1.5 text-sm outline-none focus:border-indigo-500" placeholder="搜索物料编号、批次号、供应商...">
+                        <button id="btn-clear-keyword" class="absolute inset-y-0 right-2 flex items-center text-slate-400 hover:text-slate-700 hidden" title="清除搜索">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+
+                    <button id="btn-load" class="bg-indigo-600 text-white text-sm font-bold px-6 py-1.5 rounded-lg shadow-md shadow-indigo-500/20 hover:bg-indigo-700 transition-colors">查询</button>
+                    <button id="btn-reset" class="bg-white border border-slate-200 text-slate-500 text-sm font-medium px-4 py-1.5 rounded-lg hover:bg-slate-50 transition-colors" title="重置所有筛选条件">重置</button>
+                </div>
+            </div>
+
+            <!-- Data Table Section -->
+            <div class="data-table-container">
+                <div class="data-table-wrapper" id="table-wrapper">
+                    <table class="data-table" id="inventory-table">
+                        <colgroup>
+                            <col style="width: 100px"> <!-- 物料编号 -->
+                            <col style="width: 180px"> <!-- 物料名称 -->
+                            <col style="width: 60px">  <!-- 工厂 -->
+                            <col style="width: 80px">  <!-- BIN位 -->
+                            <col style="width: 80px">  <!-- 存储地点 -->
+                            <col style="width: 120px"> <!-- 描述 -->
+                            <col style="width: 120px"> <!-- 批次 -->
+                            <col style="width: 80px">  <!-- 重量 -->
+                            <col style="width: 90px">  <!-- 生产日期 -->
+                            <col style="width: 90px">  <!-- 入库日期 -->
+                            <col style="width: 90px">  <!-- 保质期 -->
+                            <col style="width: 70px">  <!-- 良品标记 -->
+                            <col style="width: 80px">  <!-- 呆滞原因 -->
+                            <col style="width: 120px"> <!-- 呆滞描述 -->
+                            <col style="width: 80px">  <!-- 物料组 -->
+                            <col style="width: 80px">  <!-- 物料类型 -->
+                            <col style="width: 80px">  <!-- 实际库存 -->
+                            <col style="width: 60px">  <!-- 单位 -->
+                            <col style="width: 120px"> <!-- 供应商名称 -->
+                            <col style="width: 120px"> <!-- 库龄描述 -->
+                            <col style="width: 100px"> <!-- 风险标记 -->
+                            <col style="width: 150px"> <!-- 线下原因说明 -->
+                            <col style="width: 100px"> <!-- 责任部门 -->
+                            <col style="width: 100px"> <!-- 处理方案 -->
+                            <col style="width: 80px">  <!-- 处理状态 -->
+                            <col style="width: 80px">  <!-- 索赔金额 -->
+                            <col style="width: 60px">  <!-- 币种 -->
+                            <col style="width: 100px"> <!-- 预计完成 -->
+                            <col style="width: 120px"> <!-- 备注 -->
+                            <col style="width: 80px">  <!-- 操作 -->
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th data-col="0">物料编号<div class="resizer"></div></th>
+                                <th data-col="1">物料名称<div class="resizer"></div></th>
+                                <th data-col="2">工厂<div class="resizer"></div></th>
+                                <th data-col="3">BIN位<div class="resizer"></div></th>
+                                <th data-col="4">存储地点<div class="resizer"></div></th>
+                                <th data-col="5">存储地点描述<div class="resizer"></div></th>
+                                <th data-col="6">批次编号<div class="resizer"></div></th>
+                                <th data-col="7">重量(t)<div class="resizer"></div></th>
+                                <th data-col="8">生产日期<div class="resizer"></div></th>
+                                <th data-col="9">入库日期<div class="resizer"></div></th>
+                                <th data-col="10">保质期到期<div class="resizer"></div></th>
+                                <th data-col="11">良品标记<div class="resizer"></div></th>
+                                <th data-col="12">呆滞原因<div class="resizer"></div></th>
+                                <th data-col="13">呆滞原因描述<div class="resizer"></div></th>
+                                <th data-col="14">物料组<div class="resizer"></div></th>
+                                <th data-col="15">物料类型<div class="resizer"></div></th>
+                                <th data-col="16">实际库存<div class="resizer"></div></th>
+                                <th data-col="17">单位<div class="resizer"></div></th>
+                                <th data-col="18">供应商名称<div class="resizer"></div></th>
+                                <th data-col="19">库龄描述<div class="resizer"></div></th>
+                                <th data-col="20">风险标记<div class="resizer"></div></th>
+                                <th class="action-col action-col-first" data-col="21">线下原因说明<div class="resizer"></div></th>
+                                <th class="action-col" data-col="22">责任部门<div class="resizer"></div></th>
+                                <th class="action-col" data-col="23">处理方案<div class="resizer"></div></th>
+                                <th class="action-col" data-col="24">处理状态<div class="resizer"></div></th>
+                                <th class="action-col" data-col="25">索赔金额<div class="resizer"></div></th>
+                                <th class="action-col" data-col="26">币种<div class="resizer"></div></th>
+                                <th class="action-col" data-col="27">预计完成<div class="resizer"></div></th>
+                                <th class="action-col" data-col="28">备注<div class="resizer"></div></th>
+                                <th class="action-col" data-col="29">操作<div class="resizer"></div></th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body">
+                            <tr><td colspan="30" class="text-center py-20 text-slate-400">请选择月份后点击查询</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Pagination -->
+                <div class="px-6 py-4 bg-white border-t border-slate-100 flex items-center justify-between">
+                    <div id="page-info" class="text-xs text-slate-400 font-medium">共 0 条记录</div>
+                    <div id="pagination" class="flex gap-1"></div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ─── PAGE: ADMIN ─── -->
+        <div id="page-admin" class="hidden flex-1 p-6 max-w-[1800px] mx-auto w-full">
+            <div class="mb-6">
+                <h2 class="text-lg font-bold text-slate-800">管理员工具</h2>
+                <p class="text-xs text-slate-400 mt-1">数据上传与基础配置维护，仅管理员可见</p>
+            </div>
+            <!-- Diagnostic Panel -->
+            <div class="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-6">
+                <div class="flex items-center gap-3 mb-3">
+                    <span class="text-amber-600 font-bold text-sm">🔍 数据诊断</span>
+                    <span class="text-amber-500 text-xs">查看数据库中 quality_flag 的原始存储值</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <select id="diag-month" class="bg-white border border-amber-200 rounded-lg px-3 py-1.5 text-sm outline-none"></select>
+                    <button id="btn-diag" class="bg-amber-500 text-white text-xs font-bold px-4 py-1.5 rounded-lg hover:bg-amber-600">运行诊断</button>
+                </div>
+                <pre id="diag-result" class="mt-3 text-[11px] text-slate-700 bg-white border border-amber-100 rounded-lg p-3 max-h-48 overflow-auto hidden whitespace-pre-wrap"></pre>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- SAP Upload -->
+                <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                    <div class="flex items-center gap-3 mb-5">
+                        <div class="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-800">SAP 数据上传</h3>
+                            <p class="text-[11px] text-slate-400">同月份重复上传将覆盖旧数据</p>
+                        </div>
+                    </div>
+                    <form id="upload-form" class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-400 mb-1.5">快照月</label>
+                                <input id="upload-month" type="month" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                            </div>
+                            <div class="flex items-end">
+                                <label class="flex items-center gap-2 text-xs text-slate-500 mb-2 cursor-pointer">
+                                    <input id="upload-strict-mode" type="checkbox" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                                    严格模式 (纸/铝/塑必齐)
+                                </label>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1.5">Excel 文件 (支持多选，纸/铝/塑一次上传)</label>
+                            <input id="upload-files" type="file" accept=".xlsx" multiple class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 cursor-pointer">
+                        </div>
+                        <button type="submit" class="w-full bg-slate-800 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-slate-900 transition-colors">开始上传并覆盖</button>
+                    </form>
+                    <p id="upload-msg" class="text-[11px] mt-3 text-slate-400"></p>
+                </div>
+
+                <!-- Mapping Upload -->
+                <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                    <div class="flex items-center gap-3 mb-5">
+                        <div class="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-800">Mapping 表维护</h3>
+                            <p class="text-[11px] text-slate-400">上传后全量覆盖，至少需含 SKU 列</p>
+                        </div>
+                    </div>
+                    <form id="mapping-form" class="space-y-4">
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1.5">Mapping Excel</label>
+                            <input id="mapping-file" type="file" accept=".xlsx,.xls" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 cursor-pointer">
+                        </div>
+                        <button type="submit" class="w-full bg-indigo-600 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-indigo-700 transition-colors">上传并全量覆盖</button>
+                    </form>
+                    <p id="mapping-msg" class="text-[11px] mt-3 text-slate-400"></p>
+                    <p id="mapping-summary" class="text-[11px] mt-1 text-slate-400 italic"></p>
+                </div>
+            </div>
+
+            <div id="unmatched-panel" class="hidden mt-6">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span>
+                        <span class="text-sm font-bold text-slate-700">未匹配物料</span>
+                        <span id="unmatched-count" class="text-xs font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">0 个物料</span>
+                        <span class="text-xs text-slate-400">— 以下物料编号在 Mapping 表中未找到对应 SKU，已按物料聚合</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button id="btn-toggle-unmatched" class="text-xs text-slate-500 hover:text-slate-800 border border-slate-200 rounded-lg px-3 py-1 hover:bg-slate-50">展开</button>
+                        <button id="btn-download-unmatched" class="text-xs font-bold bg-amber-500 text-white rounded-lg px-3 py-1 hover:bg-amber-600 flex items-center gap-1">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            下载 Excel
+                        </button>
+                    </div>
+                </div>
+                <div id="unmatched-table-wrap" class="hidden overflow-x-auto rounded-xl border border-amber-100 bg-white">
+                    <table class="w-full text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-amber-50 text-slate-600">
+                                <th class="px-3 py-2 text-left font-semibold">物料编号</th>
+                                <th class="px-3 py-2 text-left font-semibold">物料名称</th>
+                                <th class="px-3 py-2 text-right font-semibold">未匹配批次数</th>
+                                <th class="px-3 py-2 text-right font-semibold">未匹配重量(KG)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="unmatched-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <footer class="py-6 text-center text-[10px] text-slate-400 border-t border-slate-100 bg-white">
+            &copy; 2026 RM Inventory Analysis System · Designed for Excellence
+        </footer>
+    </main>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════
+const state = {
+    token:   localStorage.getItem("rm_token") || "",
+    user:    null,
+    rows:    [],
+    enums:   { dept: [], plan: [], status: [] },
+    months:  [],
+    editBatch: null,
+    page:    1,
+    pageSize: 50,
+    total:   0,
+};
+
+const $ = (id) => document.getElementById(id);
+
+// ══════════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════════
+async function authFetch(url, opts = {}) {
+    const headers = opts.headers || {};
+    if (opts.body && !(opts.body instanceof FormData) && !headers["Content-Type"]) {
+        headers["Content-Type"] = "application/json";
+    }
+    if (state.token) headers.Authorization = `Bearer ${state.token}`;
+    const res = await fetch(url, { ...opts, headers, credentials: "include" });
+    if (!res.ok) { 
+        const t = await res.text(); 
+        if (res.status === 401) { logout(); return; }
+        throw new Error(t || `HTTP ${res.status}`); 
+    }
+    const ct = res.headers.get("content-type") || "";
+    return ct.includes("application/json") ? res.json() : res.text();
+}
+
+function riskTag(row) {
+    let cls = "risk-normal", label = "正常", icon = "✓";
+    if (row.quality_flag === "N") { cls = "risk-defective"; label = "不良品"; icon = "✗"; }
+    else if (["D", "E"].includes(row.aging_category)) { cls = "risk-warn"; label = "超期库存"; icon = "⏱"; }
+    return `<span class="tag ${cls}">${icon} ${label}</span>`;
+}
+
+function qualityTag(v) {
+    if (!v) return "";
+    if (v === "N") return `<span class="tag risk-defective" style="font-size:11px">N</span>`;
+    if (v === "Y") return `<span class="tag risk-normal" style="font-size:11px">Y</span>`;
+    return `<span class="text-xs text-slate-500">${v}</span>`;
+}
+
+function showPage(page) {
+    const isInventory = page === "inventory";
+    $("page-inventory").classList.toggle("hidden", !isInventory);
+    $("page-admin").classList.toggle("hidden", isInventory);
+
+    const ACTIVE = "px-4 py-1.5 rounded-lg text-sm font-semibold bg-indigo-50 text-indigo-600";
+    const IDLE   = "px-4 py-1.5 rounded-lg text-sm font-medium text-slate-500 hover:bg-slate-50";
+
+    $("nav-inventory").className = isInventory ? ACTIVE : IDLE;
+    // nav-admin visibility is controlled only by role check at login.
+    // Here we only change the active/idle styling without touching hidden.
+    const adminEl = $("nav-admin");
+    const wasHidden = adminEl.classList.contains("hidden");
+    adminEl.className = (!isInventory ? ACTIVE : IDLE);
+    if (wasHidden) adminEl.classList.add("hidden");
+}
+
+function statusTag(v) {
+    const colors = {
+        "待处理":"#94a3b8", "讨论中":"#3b82f6", "进行中":"#f59e0b",
+        "待定":"#8b5cf6", "已完成":"#10b981", "已关闭":"#6b7280"
+    };
+    const bgs = {
+        "待处理":"#f1f5f9", "讨论中":"#eff6ff", "进行中":"#fffbeb",
+        "待定":"#f5f3ff", "已完成":"#ecfdf5", "已关闭":"#f3f4f6"
+    };
+    const c = colors[v] || "#94a3b8";
+    const bg = bgs[v] || "#f1f5f9";
+    return `<span class="tag" style="color:${c}; background:${bg}">${v||"未分配"}</span>`;
+}
+
+// ══════════════════════════════════════════════════════
+//  TABLE RESIZING
+// ══════════════════════════════════════════════════════
+function initResizing() {
+    const table = $("inventory-table");
+    const cols = table.querySelectorAll("colgroup col");
+    const headers = table.querySelectorAll("th");
+
+    headers.forEach((th, i) => {
+        const resizer = th.querySelector(".resizer");
+        if (!resizer) return;
+
+        let startX, startWidth;
+
+        resizer.onmousedown = (e) => {
+            startX = e.pageX;
+            startWidth = th.offsetWidth;
+            table.classList.add("resizing");
+            
+            document.onmousemove = (e) => {
+                const width = startWidth + (e.pageX - startX);
+                if (width > 40) {
+                    cols[i].style.width = width + "px";
+                }
+            };
+
+            document.onmouseup = () => {
+                document.onmousemove = null;
+                document.onmouseup = null;
+                table.classList.remove("resizing");
+            };
+        };
+    });
+}
+
+// ══════════════════════════════════════════════════════
+//  CORE LOGIC
+// ══════════════════════════════════════════════════════
+async function loadEnums() {
+    const [dept, plan, statusRes] = await Promise.all([
+        authFetch("/api/enums/dept"),
+        authFetch("/api/enums/action_plan"),
+        authFetch("/api/enums/action_status"),
+    ]);
+    state.enums.dept = dept.items || [];
+    state.enums.plan = plan.items || [];
+    state.enums.status = statusRes.items || [];
+}
+
+async function loadMonths() {
+    state.months = await authFetch("/api/inventory/months");
+    const opts = state.months.map(m => `<option value="${m}">${m}</option>`).join("");
+    $("month-select").innerHTML = opts;
+    $("diag-month").innerHTML = opts;
+    if (state.months.length) {
+        $("upload-month").value = state.months[0];
+    }
+}
+
+async function loadCategoryPrimaries() {
+    const month = $("month-select").value;
+    if (!month) return;
+    try {
+        const data = await authFetch(`/api/inventory/category-primaries?snapshot_month=${month}`);
+        const sel = $("rm-type-select");
+        sel.innerHTML = '<option value="">全部</option>' +
+            (data.items || []).map(c => `<option value="${c}">${c}</option>`).join("");
+    } catch (err) {
+        console.warn("Failed to load category primaries:", err);
+    }
+}
+
+async function loadUnmatched() {
+    const month = $("month-select").value;
+    if (!month) return;
+    try {
+        const data = await authFetch(`/api/inventory/unmatched?snapshot_month=${month}`);
+        const panel = $("unmatched-panel");
+        const total = data.total || 0;
+        $("unmatched-count").textContent = `${total} 个物料`;
+
+        if (total === 0) {
+            panel.classList.add("hidden");
+            return;
+        }
+        panel.classList.remove("hidden");
+
+        // Render rows for the expanded table
+        const tbody = $("unmatched-tbody");
+        tbody.innerHTML = (data.items || []).map(r => `
+            <tr class="border-t border-amber-50 hover:bg-amber-50/50">
+                <td class="px-3 py-1.5 font-mono text-indigo-700 font-bold">${r.material_code || ""}</td>
+                <td class="px-3 py-1.5 text-slate-700">${r.material_name || ""}</td>
+                <td class="px-3 py-1.5 text-right">${(r.batch_count ?? 0).toLocaleString()}</td>
+                <td class="px-3 py-1.5 text-right">${(r.weight_kg ?? 0).toLocaleString()}</td>
+            </tr>`).join("");
+    } catch (err) {
+        console.warn("Failed to load unmatched:", err);
+    }
+}
+
+async function loadInventory() {
+    const abnormal   = $("abnormal-select").value;
+    const rmType     = $("rm-type-select").value;
+    const aging      = $("aging-select").value;
+    const keyword    = $("keyword").value.trim();
+    const month      = $("month-select").value;
+    const plantLabel = $("plant-select").value;
+
+    if (!month) return;
+
+    const q = new URLSearchParams({
+        snapshot_month: month,
+        page: state.page,
+        page_size: state.pageSize,
+    });
+
+    if (plantLabel === "KS")       q.set("plant", "3000");
+    else if (plantLabel === "IDN") q.set("plant", "3301");
+
+    if (abnormal !== "") q.set("is_abnormal", abnormal);
+    if (rmType)          q.set("category_primary", rmType);
+    if (aging)           q.set("aging_category", aging);
+    if (keyword)         q.set("keyword", keyword);
+
+    try {
+        // Fire list, stats, and unmatched check in parallel
+        const [res] = await Promise.all([
+            authFetch(`/api/inventory/list?${q}`),
+            loadStats(),
+            loadUnmatched(),
+        ]);
+        state.rows = res.items || [];
+        state.total = res.total;
+        renderTable();
+        renderPagination();
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+function _buildStatsParams() {
+    const month      = $("month-select").value;
+    const plantLabel = $("plant-select").value;
+    const abnormal   = $("abnormal-select").value;
+    const rmType     = $("rm-type-select").value;
+    const aging      = $("aging-select").value;
+    const keyword    = $("keyword").value.trim();
+
+    const q = new URLSearchParams({ snapshot_month: month });
+    if (plantLabel === "KS")  q.set("plant", "3000");
+    else if (plantLabel === "IDN") q.set("plant", "3301");
+    if (abnormal !== "")  q.set("is_abnormal", abnormal);
+    if (rmType)           q.set("category_primary", rmType);
+    if (aging)            q.set("aging_category", aging);
+    if (keyword)          q.set("keyword", keyword);
+    return q;
+}
+
+async function loadStats() {
+    const month = $("month-select").value;
+    if (!month) return;
+    try {
+        const s   = await authFetch(`/api/inventory/stats?${_buildStatsParams()}`);
+        const fmt  = (n) => Number(n).toLocaleString();
+        const fmtW = (w) => `${Number(w).toLocaleString()} t`;
+
+        $("stat-total").textContent     = fmt(s.total);
+        $("stat-total-w").textContent   = fmtW(s.total_weight);
+        $("stat-defective").textContent = fmt(s.defective);
+        $("stat-defective-w").textContent = fmtW(s.defective_weight);
+        $("stat-pending").textContent   = fmt(s.pending);
+        $("stat-pending-w").textContent = fmtW(s.pending_weight);
+        $("stat-done").textContent      = fmt(s.done);
+        $("stat-done-w").textContent    = fmtW(s.done_weight);
+
+        // Completion rate: show % with numerator/denominator as sub-label
+        const rate = s.completion_rate;
+        $("stat-rate").textContent     = s.defective > 0 ? `${rate}%` : "—";
+        $("stat-rate-sub").textContent = s.defective > 0
+            ? `${s.done} / ${s.defective} 条`
+            : "暂无不良品";
+    } catch (err) {
+        console.warn("Stats load failed:", err);
+    }
+}
+
+function renderTable() {
+    const tbody = $("table-body");
+    if (!state.rows.length) {
+        tbody.innerHTML = `<tr><td colspan="30" class="text-center py-20 text-slate-400">暂无匹配数据</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = state.rows.map(row => {
+        const isEditing = state.editBatch === row.batch_no;
+        if (isEditing) return renderEditRow(row);
+        return renderReadRow(row);
+    }).join("");
+
+    tbody.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => { state.editBatch = b.dataset.edit; renderTable(); });
+    tbody.querySelectorAll("[data-cancel]").forEach(b => b.onclick = () => { state.editBatch = null; renderTable(); });
+    tbody.querySelectorAll("[data-save]").forEach(b => b.onclick = () => saveAction(b.dataset.save));
+}
+
+function renderReadRow(row) {
+    const weightT = row.weight_kg ? (row.weight_kg / 1000).toFixed(1) : "0.0";
+    const plantDisplay = (row.plant === "3000" || row.plant === "3001") ? "KS" : (row.plant === "3301" ? "IDN" : row.plant);
+    
+    return `
+        <tr>
+            <td class="font-mono text-indigo-600 font-bold">${row.material_code || ""}</td>
+            <td class="font-medium text-slate-700" title="${row.material_name}">${row.material_name || ""}</td>
+            <td>${plantDisplay}</td>
+            <td>${row.bin_location || ""}</td>
+            <td>${row.storage_location || ""}</td>
+            <td title="${row.storage_loc_desc}">${row.storage_loc_desc || ""}</td>
+            <td class="font-mono text-blue-600 font-bold bg-blue-50/30">${row.batch_no}</td>
+            <td class="text-right font-bold">${weightT}</td>
+            <td>${row.production_date || ""}</td>
+            <td>${row.inbound_date || ""}</td>
+            <td>${row.expiry_date || ""}</td>
+            <td class="text-center">${qualityTag(row.quality_flag)}</td>
+            <td>${row.obsolete_reason || ""}</td>
+            <td title="${row.obsolete_reason_desc}">${row.obsolete_reason_desc || ""}</td>
+            <td>${row.material_group || ""}</td>
+            <td>${row.material_type || ""}</td>
+            <td class="text-right">${(row.actual_stock || 0).toLocaleString()}</td>
+            <td>${row.unit || ""}</td>
+            <td title="${row.supplier_name}">${row.supplier_name || ""}</td>
+            <td>${row.aging_description || ""}</td>
+            <td>${riskTag(row)}</td>
+            <td class="action-col action-col-first italic text-slate-500">${row.reason_note || ""}</td>
+            <td class="action-col">${row.responsible_dept || ""}</td>
+            <td class="action-col">${row.action_plan || ""}</td>
+            <td class="action-col">${statusTag(row.action_status)}</td>
+            <td class="action-col text-right">${row.claim_amount ? row.claim_amount.toLocaleString() : ""}</td>
+            <td class="action-col">${row.claim_currency || ""}</td>
+            <td class="action-col">${row.expected_completion || ""}</td>
+            <td class="action-col" title="${row.remark}">${row.remark || ""}</td>
+            <td class="action-col">
+                <button class="text-indigo-600 font-bold hover:underline" data-edit="${row.batch_no}">处理</button>
+            </td>
+        </tr>
+    `;
+}
+
+function renderEditRow(row) {
+    const opt = (list, val) => list.map(i => `<option value="${i.enum_value}" ${i.enum_value===val?'selected':''}>${i.enum_value}</option>`).join("");
+    return `
+        <tr class="editing">
+            <td class="font-mono font-bold">${row.material_code || ""}</td>
+            <td colspan="20" class="bg-indigo-50/50 italic text-indigo-400 text-[10px]">
+                正在编辑批次 ${row.batch_no} 的处理方案...
+            </td>
+            <td class="action-col action-col-first">
+                <input id="e-note" class="t-input" value="${row.reason_note || ""}">
+            </td>
+            <td class="action-col">
+                <select id="e-dept" class="t-input"><option value="">-</option>${opt(state.enums.dept, row.responsible_dept)}</select>
+            </td>
+            <td class="action-col">
+                <select id="e-plan" class="t-input"><option value="">-</option>${opt(state.enums.plan, row.action_plan)}</select>
+            </td>
+            <td class="action-col">
+                <select id="e-status" class="t-input">${opt(state.enums.status, row.action_status || "待处理")}</select>
+            </td>
+            <td class="action-col">
+                <input id="e-amount" type="number" class="t-input" value="${row.claim_amount || ""}">
+            </td>
+            <td class="action-col">
+                <select id="e-cur" class="t-input">
+                    <option value="">-</option>
+                    <option value="CNY" ${row.claim_currency==='CNY'?'selected':''}>CNY</option>
+                    <option value="IDR" ${row.claim_currency==='IDR'?'selected':''}>IDR</option>
+                </select>
+            </td>
+            <td class="action-col">
+                <input id="e-date" type="date" class="t-input" value="${row.expected_completion || ""}">
+            </td>
+            <td class="action-col">
+                <input id="e-remark" class="t-input" value="${row.remark || ""}">
+            </td>
+            <td class="action-col flex gap-2">
+                <button class="bg-indigo-600 text-white px-2 py-1 rounded text-[10px] font-bold" data-save="${row.batch_no}">保存</button>
+                <button class="bg-slate-200 text-slate-600 px-2 py-1 rounded text-[10px] font-bold" data-cancel="${row.batch_no}">取消</button>
+            </td>
+        </tr>
+    `;
+}
+
+async function saveAction(batchNo) {
+    const row = state.rows.find(r => r.batch_no === batchNo);
+    const payload = {
+        snapshot_month: row.snapshot_month,
+        batch_no: batchNo,
+        reason_note: $("e-note").value.trim() || null,
+        responsible_dept: $("e-dept").value,
+        action_plan: $("e-plan").value,
+        action_status: $("e-status").value,
+        claim_amount: $("e-amount").value ? Number($("e-amount").value) : null,
+        claim_currency: $("e-cur").value || null,
+        expected_completion: $("e-date").value || null,
+        remark: $("e-remark").value.trim() || null,
+    };
+
+    if (!payload.responsible_dept || !payload.action_plan) {
+        alert("责任部门和处理方案必填"); return;
+    }
+
+    try {
+        await authFetch("/api/actions/save", { method: "POST", body: JSON.stringify(payload) });
+        state.editBatch = null;
+        loadInventory();
+    } catch (err) {
+        alert("保存失败: " + err.message);
+    }
+}
+
+function renderPagination() {
+    const totalPages = Math.ceil(state.total / state.pageSize) || 1;
+    $("page-info").textContent = `第 ${state.page} / ${totalPages} 页 · 共 ${state.total} 条记录`;
+    const p = $("pagination");
+    p.innerHTML = "";
+    const btn = (label, target, active = false, disabled = false) => {
+        const b = document.createElement("button");
+        b.className = `px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${active ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'}`;
+        if (disabled) b.style.opacity = "0.4";
+        b.textContent = label;
+        b.onclick = () => { if (!disabled && !active) { state.page = target; loadInventory(); } };
+        p.appendChild(b);
+    };
+    btn("«", 1, false, state.page === 1);
+    const start = Math.max(1, state.page - 2);
+    for (let i = start; i <= Math.min(totalPages, start + 4); i++) btn(i, i, i === state.page);
+    btn("»", totalPages, false, state.page === totalPages);
+}
+
+function logout() {
+    state.token = ""; state.user = null;
+    localStorage.removeItem("rm_token");
+    $("app").classList.add("hidden");
+    $("login-view").classList.remove("hidden");
+}
+
+async function init() {
+    if (!state.token) return;
+    try {
+        state.user = await authFetch("/api/auth/me");
+        $("login-view").classList.add("hidden");
+        $("app").classList.remove("hidden");
+        $("current-user-name").textContent = state.user.display_name || state.user.username;
+        $("current-user-dept").textContent = state.user.department || state.user.role;
+        if (state.user.role === "admin") {
+            $("nav-admin").classList.remove("hidden");
+            $("nav-admin").dataset.visible = "1";
+        }
+        await Promise.all([loadMonths(), loadEnums()]);
+        await loadCategoryPrimaries();
+        initResizing();
+        loadInventory();
+    } catch (err) {
+        logout();
+    }
+}
+
+$("login-form").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+        const res = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ username: $("login-user").value, password: $("login-pwd").value })
+        });
+        if (!res.ok) throw new Error("登录失败");
+        const data = await res.json();
+        state.token = data.access_token;
+        localStorage.setItem("rm_token", state.token);
+        init();
+    } catch (err) {
+        $("login-tip").textContent = err.message;
+    }
+};
+
+$("btn-logout").onclick = logout;
+$("nav-inventory").onclick = () => showPage("inventory");
+$("nav-admin").onclick = () => showPage("admin");
+
+$("btn-load").onclick = () => { state.page = 1; loadInventory(); };
+$("btn-toggle-unmatched").onclick = () => {
+    const wrap = $("unmatched-table-wrap");
+    const btn  = $("btn-toggle-unmatched");
+    const hidden = wrap.classList.toggle("hidden");
+    btn.textContent = hidden ? "展开" : "收起";
+};
+$("btn-download-unmatched").onclick = () => {
+    const month = $("month-select").value;
+    if (!month) return;
+    const url = `/api/inventory/unmatched/download?snapshot_month=${month}`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.setAttribute("download", `unmatched_${month}.xlsx`);
+    // Pass auth header via fetch + blob since <a> doesn't support custom headers
+    authFetch(url).then(async () => {
+        const resp = await fetch(url, { headers: { Authorization: `Bearer ${state.token}` } });
+        const blob = await resp.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = blobUrl;
+        link.download = `unmatched_${month}.xlsx`;
+        link.click();
+        URL.revokeObjectURL(blobUrl);
+    }).catch(err => alert("下载失败: " + err.message));
+};
+
+$("btn-reset").onclick = () => {
+    $("plant-select").value    = "";
+    $("abnormal-select").value = "";
+    $("rm-type-select").value  = "";
+    $("aging-select").value    = "";
+    $("keyword").value         = "";
+    $("btn-clear-keyword").classList.add("hidden");
+    state.page = 1;
+    loadInventory();
+};
+$("month-select").onchange = () => { state.page = 1; loadCategoryPrimaries(); loadInventory(); };
+$("plant-select").onchange = () => { state.page = 1; loadInventory(); };
+$("abnormal-select").onchange = () => { state.page = 1; loadInventory(); };
+$("rm-type-select").onchange = () => { state.page = 1; loadInventory(); };
+$("aging-select").onchange  = () => { state.page = 1; loadInventory(); };
+$("keyword").oninput = () => {
+    $("btn-clear-keyword").classList.toggle("hidden", !$("keyword").value);
+};
+$("keyword").onkeydown = (e) => { if (e.key === 'Enter') { state.page = 1; loadInventory(); } };
+$("btn-clear-keyword").onclick = () => {
+    $("keyword").value = "";
+    $("btn-clear-keyword").classList.add("hidden");
+    state.page = 1;
+    loadInventory();
+};
+
+$("upload-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData();
+    fd.set("snapshot_month", $("upload-month").value);
+    fd.set("strict_mode", $("upload-strict-mode").checked);
+    Array.from($("upload-files").files).forEach(f => fd.append("files", f));
+    try {
+        $("upload-msg").textContent = "上传中...";
+        const res = await authFetch("/api/upload/sap-data/batch", { method: "POST", body: fd });
+        $("upload-msg").textContent = `成功导入 ${res.file_count} 个文件`;
+        await loadMonths();
+        await loadCategoryPrimaries();
+        loadInventory();
+    } catch (err) {
+        $("upload-msg").textContent = "失败: " + err.message;
+    }
+};
+
+$("btn-diag").onclick = async () => {
+    const month = $("diag-month").value;
+    if (!month) { alert("请先选择月份"); return; }
+    try {
+        const data = await authFetch(`/api/inventory/debug-flags?snapshot_month=${month}`);
+        const pre = $("diag-result");
+        pre.classList.remove("hidden");
+        if (!data.length) {
+            pre.textContent = "⚠ 该月份暂无数据记录。请先上传。";
+            return;
+        }
+        // Show first 10 rows with the key fields
+        const lines = data.map((r, i) =>
+            `[${i+1}] ${r.material_code || '?'} | 批次:${r.batch_no || '?'} | quality_flag=${JSON.stringify(r.quality_flag)} | obsolete_reason=${JSON.stringify(r.obsolete_reason)} | is_abnormal=${r.is_abnormal}`
+        );
+        const nullCount = data.filter(r => r.quality_flag === null).length;
+        const total = data.length;
+        pre.textContent = `共 ${total} 条（最多显示30条），quality_flag 为 null 的有 ${nullCount} 条\n\n` + lines.join("\n");
+    } catch(err) {
+        $("diag-result").classList.remove("hidden");
+        $("diag-result").textContent = "诊断失败: " + err.message;
+    }
+};
+
+$("mapping-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData();
+    fd.append("file", $("mapping-file").files[0]);
+    try {
+        $("mapping-msg").textContent = "上传中...";
+        const res = await authFetch("/api/mapping/upload", { method: "POST", body: fd });
+        $("mapping-msg").textContent = `成功覆盖 ${res.row_count} 条 Mapping`;
+        await loadCategoryPrimaries();
+        loadInventory();
+    } catch (err) {
+        $("mapping-msg").textContent = "失败: " + err.message;
+    }
+};
+
+init();
+</script>
+</body>
+</html>

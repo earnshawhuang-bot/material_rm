@@ -1,0 +1,220 @@
+"""Upload APIs for SAP snapshots and upload logs."""
+
+from __future__ import annotations
+
+from typing import List
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from sqlalchemy.orm import Session
+
+from .. import models, schemas
+from ..auth import get_current_user, require_admin
+from ..database import get_db
+from ..services import upload_service
+
+router = APIRouter(prefix="/api/upload", tags=["upload"])
+
+ALLOWED_RM_TYPES = {"Paper", "AL", "PE"}
+
+
+@router.post("/sap-data", response_model=schemas.UploadResponse)
+def upload_sap_data(
+    snapshot_month: str = Form(..., description="快照月 YYYY-MM"),
+    rm_type: str = Form(..., description="Paper/AL/PE"),
+    file: UploadFile = File(...),
+    current_user=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Upload one SAP file and overwrite snapshot for same period+type."""
+    if rm_type not in ALLOWED_RM_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="rm_type 仅支持 Paper / AL / PE",
+        )
+    try:
+        snapshot_month = upload_service.validate_snapshot_month(snapshot_month)
+        result = upload_service.parse_and_save_sap_upload(
+            db=db,
+            file=file,
+            snapshot_month=snapshot_month,
+            rm_type=rm_type,
+            uploaded_by=current_user.username,
+        )
+        db.add(
+            models.SysUploadLog(
+                snapshot_month=snapshot_month,
+                file_name=file.filename,
+                rm_type=rm_type,
+                row_count=result.row_count,
+                uploaded_by=current_user.username,
+                status="success",
+            )
+        )
+        db.commit()
+    except Exception as exc:  # pragma: no cover - 外部调用层统一处理
+        db.rollback()
+        db.add(
+            models.SysUploadLog(
+                snapshot_month=snapshot_month,
+                file_name=file.filename,
+                rm_type=rm_type,
+                row_count=0,
+                uploaded_by=current_user.username,
+                status="failed",
+            )
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"上传失败: {exc}",
+        ) from exc
+    return schemas.UploadResponse(
+        snapshot_month=result.snapshot_month,
+        rm_type=result.rm_type,
+        file_name=result.file_name,
+        row_count=result.row_count,
+        abnormal_count=result.abnormal_count,
+    )
+
+
+@router.post("/sap-data/batch")
+def upload_sap_data_batch(
+    snapshot_month: str = Form(..., description="快照月 YYYY-MM"),
+    files: List[UploadFile] = File(..., description="Paper/AL/PE 三个文件"),
+    strict_mode: bool = Form(False, description="是否要求必须上传三个类型"),
+    current_user=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Batch upload for Paper/AL/PE files in one step."""
+    if not files:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="请上传至少一个 Excel 文件",
+        )
+
+    if len(files) > 3:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="请一次最多上传 3 个文件",
+        )
+
+    try:
+        snapshot_month = upload_service.validate_snapshot_month(snapshot_month)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+
+    detected_types: list[str] = []
+    for file in files:
+        rm_type = upload_service.detect_rm_type_by_filename(file.filename or "")
+        detected_types.append(rm_type)
+
+    if strict_mode:
+        uploaded_types = set(detected_types)
+        if set(ALLOWED_RM_TYPES) != uploaded_types:
+            missing_types = sorted(set(ALLOWED_RM_TYPES) - uploaded_types)
+            repeat_types = sorted(
+                {
+                    rm_type
+                    for rm_type in set(detected_types)
+                    if detected_types.count(rm_type) > 1
+                }
+            )
+            details = []
+            if missing_types:
+                details.append(f"缺少: {', '.join(missing_types)}")
+            if repeat_types:
+                details.append(f"重复: {', '.join(repeat_types)}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"严格模式开启后需上传 Paper/AL/PE 三类文件且各只1个。{'; '.join(details)}",
+            )
+
+    results = []
+    total_rows = 0
+    total_abnormal = 0
+
+    try:
+        for file in files:
+            rm_type = upload_service.detect_rm_type_by_filename(file.filename or "")
+            result = upload_service.parse_and_save_sap_upload(
+                db=db,
+                file=file,
+                snapshot_month=snapshot_month,
+                rm_type=rm_type,
+                uploaded_by=current_user.username,
+            )
+            results.append(
+                {
+                    "snapshot_month": result.snapshot_month,
+                    "rm_type": result.rm_type,
+                    "file_name": result.file_name,
+                    "row_count": result.row_count,
+                    "abnormal_count": result.abnormal_count,
+                }
+            )
+            total_rows += result.row_count
+            total_abnormal += result.abnormal_count
+            db.add(
+                models.SysUploadLog(
+                    snapshot_month=snapshot_month,
+                    file_name=file.filename,
+                    rm_type=rm_type,
+                    row_count=result.row_count,
+                    uploaded_by=current_user.username,
+                    status="success",
+                )
+            )
+
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        for file in files:
+            file_name = file.filename or "unknown.xlsx"
+            try:
+                rm_type = upload_service.detect_rm_type_by_filename(file_name)
+            except Exception:
+                rm_type = "未知"
+            db.add(
+                models.SysUploadLog(
+                    snapshot_month=snapshot_month,
+                    file_name=file_name,
+                    rm_type=rm_type,
+                    row_count=0,
+                    uploaded_by=current_user.username,
+                    status="failed",
+                )
+            )
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"批量上传失败: {exc}",
+        ) from exc
+
+    return {
+        "snapshot_month": snapshot_month,
+        "file_count": len(results),
+        "row_count": total_rows,
+        "abnormal_count": total_abnormal,
+        "items": results,
+    }
+
+
+@router.get("/history")
+def upload_history(db: Session = Depends(get_db), _: object = Depends(get_current_user)):
+    """Upload log list used by admin UI."""
+    logs = db.query(models.SysUploadLog).order_by(models.SysUploadLog.uploaded_at.desc()).all()
+    return [
+        {
+            "id": log.id,
+            "snapshot_month": log.snapshot_month,
+            "file_name": log.file_name,
+            "rm_type": log.rm_type,
+            "row_count": log.row_count,
+            "uploaded_by": log.uploaded_by,
+            "uploaded_at": log.uploaded_at,
+            "status": log.status,
+        }
+        for log in logs
+    ]
