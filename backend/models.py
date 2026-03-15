@@ -74,8 +74,8 @@ class BatchAction(Base):
     snapshot_month: Mapped[str] = mapped_column(String(7), nullable=False, index=True)
     batch_no: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     reason_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    responsible_dept: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    action_plan: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    responsible_dept: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    action_plan: Mapped[str | None] = mapped_column(String(500), nullable=True)
     action_status: Mapped[str | None] = mapped_column(String(20), default="待处理")
     remark: Mapped[str | None] = mapped_column(String(500), nullable=True)
     claim_amount: Mapped[float | None] = mapped_column(DECIMAL(18, 2), nullable=True)
@@ -133,7 +133,7 @@ class SysUploadLog(Base):
 
 
 class SysEnumConfig(Base):
-    """枚举项配置（责任部门/处理方案/处理状态）。"""
+    """枚举项配置（仅处理状态使用枚举）。"""
 
     __tablename__ = "sys_enum_config"
 

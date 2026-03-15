@@ -11,6 +11,7 @@ from .. import models, schemas
 from ..auth import get_current_user, require_admin
 from ..database import get_db
 from ..services import upload_service
+from ..services.action_service import carry_forward_actions, import_actions_from_excel
 
 router = APIRouter(prefix="/api/upload", tags=["upload"])
 
@@ -51,6 +52,9 @@ def upload_sap_data(
             )
         )
         db.commit()
+        # 自动继承上月行动项
+        cf = carry_forward_actions(db, snapshot_month)
+        db.commit()
     except Exception as exc:  # pragma: no cover - 外部调用层统一处理
         db.rollback()
         db.add(
@@ -68,13 +72,14 @@ def upload_sap_data(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"上传失败: {exc}",
         ) from exc
-    return schemas.UploadResponse(
-        snapshot_month=result.snapshot_month,
-        rm_type=result.rm_type,
-        file_name=result.file_name,
-        row_count=result.row_count,
-        abnormal_count=result.abnormal_count,
-    )
+    return {
+        "snapshot_month": result.snapshot_month,
+        "rm_type": result.rm_type,
+        "file_name": result.file_name,
+        "row_count": result.row_count,
+        "abnormal_count": result.abnormal_count,
+        "carry_forward": cf,
+    }
 
 
 @router.post("/sap-data/batch")
@@ -168,6 +173,9 @@ def upload_sap_data_batch(
             )
 
         db.commit()
+        # 自动继承上月行动项
+        cf = carry_forward_actions(db, snapshot_month)
+        db.commit()
     except Exception as exc:
         db.rollback()
         for file in files:
@@ -198,7 +206,40 @@ def upload_sap_data_batch(
         "row_count": total_rows,
         "abnormal_count": total_abnormal,
         "items": results,
+        "carry_forward": cf,
     }
+
+
+@router.post("/action-import", response_model=schemas.ActionImportResponse)
+def upload_action_import(
+    snapshot_month: str = Form(..., description="快照月 YYYY-MM"),
+    file: UploadFile = File(...),
+    current_user=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """一次性导入线下 Excel 处理记录（按批次编号匹配 quality_flag='N' 的批次）。"""
+    try:
+        snapshot_month = upload_service.validate_snapshot_month(snapshot_month)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    try:
+        result = import_actions_from_excel(
+            db=db,
+            file=file,
+            snapshot_month=snapshot_month,
+            uploaded_by=current_user.username,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"导入失败: {exc}",
+        ) from exc
+
+    return result
 
 
 @router.get("/history")

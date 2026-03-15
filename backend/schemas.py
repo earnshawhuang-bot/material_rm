@@ -28,7 +28,7 @@ class UserInfo(BaseModel):
     is_active: bool = True
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class UploadResponse(BaseModel):
@@ -97,7 +97,7 @@ class InventoryItem(BaseModel):
     expected_completion: Optional[date] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class InventoryListResponse(BaseModel):
@@ -111,8 +111,8 @@ class ActionSaveRequest(BaseModel):
     snapshot_month: str
     batch_no: str
     reason_note: Optional[str] = None
-    responsible_dept: str
-    action_plan: str
+    responsible_dept: Optional[str] = None
+    action_plan: Optional[str] = None
     action_status: str
     remark: Optional[str] = None
     claim_amount: Optional[float] = None
@@ -163,6 +163,35 @@ class MaterialMappingUploadResponse(BaseModel):
     file_name: str
     row_count: int
     replaced: bool
+
+
+class UserCreateRequest(BaseModel):
+    username: str
+    password: str
+    display_name: Optional[str] = None
+    department: Optional[str] = None
+    plant: Optional[str] = None
+    role: str = "user"
+
+
+class UserUpdateRequest(BaseModel):
+    display_name: Optional[str] = None
+    department: Optional[str] = None
+    plant: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+    password: Optional[str] = None
+
+
+class UserListResponse(BaseModel):
+    items: list[UserInfo]
+
+
+class ActionImportResponse(BaseModel):
+    matched: int
+    skipped: int
+    errors: int
+    error_details: list[str] = []
 
 
 class StatsResponse(BaseModel):

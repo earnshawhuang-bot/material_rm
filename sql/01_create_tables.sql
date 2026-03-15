@@ -90,8 +90,8 @@ BEGIN
         snapshot_month        VARCHAR(7) NOT NULL,          -- 关联期间
         batch_no              VARCHAR(20) NOT NULL,          -- 关联批次编号
         reason_note           NVARCHAR(500),                 -- 线下原因补充说明（自由文本）
-        responsible_dept      NVARCHAR(50),                  -- 责任部门（下拉选择）
-        action_plan           NVARCHAR(100),                 -- 处理方案（下拉选择）
+        responsible_dept      NVARCHAR(100),                 -- 责任部门（自由文本输入）
+        action_plan           NVARCHAR(500),                 -- 处理方案（自由文本输入）
         action_status         NVARCHAR(20) DEFAULT N'待处理', -- 处理状态（下拉选择）
         remark                NVARCHAR(500),                 -- 备注（投诉单号等补充信息）
         claim_amount          DECIMAL(18,2),                 -- 索赔金额
@@ -170,7 +170,7 @@ IF OBJECT_ID(N'dbo.sys_enum_config', N'U') IS NULL
 BEGIN
     CREATE TABLE dbo.sys_enum_config (
         id              INT IDENTITY(1,1) PRIMARY KEY,
-        enum_type       VARCHAR(50) NOT NULL,              -- dept / action_plan / action_status
+        enum_type       VARCHAR(50) NOT NULL,              -- action_status（责任部门和处理方案已改为自由文本）
         enum_value      NVARCHAR(100) NOT NULL,
         sort_order      INT DEFAULT 0,
         is_active       BIT DEFAULT 1

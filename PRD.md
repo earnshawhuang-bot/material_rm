@@ -110,17 +110,13 @@
 | D | ＞180天≤360天 | 高风险 |
 | E | ＞360天 | 严重 |
 
-**责任部门（标准化下拉选项）：**
+**责任部门（自由文本输入）：**
 
-```
-采购, 质量, 研发, 生产, PPIC&仓库, PPIC&质量, PPIC&生产, 采购/质量, 质量/研发, 研发/质量
-```
+> 责任部门因存在多部门组合情况（如"质量/研发""PPIC&仓库"等），无法穷举枚举，改为自由文本输入。用户可自行填写部门名称或组合。
 
-**处理方案（标准化下拉选项）：**
+**处理方案（自由文本输入）：**
 
-```
-冻结, 退货, 转内贸退货, 特采释放, 料废外卖, 按呆滞料流程处理, 绕卷, 重新绕卷, 索赔, 索赔后绕卷, 试机纸, 测试时领用, 待使用完毕一起投诉, 其他（需填备注）
-```
+> 处理方案因批次情况各异，无法穷举枚举，改为自由文本输入。用户可自行填写如"冻结""退货""特采释放""料废外卖""索赔"等，也可填写任意描述性方案。
 
 **处理状态（标准化下拉选项）：**
 
@@ -228,8 +224,8 @@ CREATE TABLE rm_batch_actions (
     snapshot_month        VARCHAR(7) NOT NULL,          -- 关联期间
     batch_no              VARCHAR(20) NOT NULL,          -- 关联批次编号
     reason_note           NVARCHAR(500),                 -- 线下原因补充说明（自由文本）
-    responsible_dept      NVARCHAR(50),                  -- 责任部门（下拉选择）
-    action_plan           NVARCHAR(100),                 -- 处理方案（下拉选择）
+    responsible_dept      NVARCHAR(100),                 -- 责任部门（自由文本输入）
+    action_plan           NVARCHAR(500),                 -- 处理方案（自由文本输入）
     action_status         NVARCHAR(20) DEFAULT N'待处理', -- 处理状态（下拉选择）
     remark                NVARCHAR(500),                 -- 备注（投诉单号等补充信息）
     claim_amount          DECIMAL(18,2),                 -- 索赔金额
@@ -291,41 +287,17 @@ CREATE TABLE sys_upload_log (
 -- ============================================================
 CREATE TABLE sys_enum_config (
     id              INT IDENTITY(1,1) PRIMARY KEY,
-    enum_type       VARCHAR(50) NOT NULL,              -- dept / action_plan / action_status
+    enum_type       VARCHAR(50) NOT NULL,              -- action_status
     enum_value      NVARCHAR(100) NOT NULL,
     sort_order      INT DEFAULT 0,
     is_active       BIT DEFAULT 1
 );
 
 -- 初始化枚举数据
+-- 责任部门：已改为自由文本输入，不再使用枚举
+-- 处理方案：已改为自由文本输入，不再使用枚举
 INSERT INTO sys_enum_config (enum_type, enum_value, sort_order) VALUES
--- 责任部门
-('dept', N'采购', 1),
-('dept', N'质量', 2),
-('dept', N'研发', 3),
-('dept', N'生产', 4),
-('dept', N'PPIC&仓库', 5),
-('dept', N'PPIC&质量', 6),
-('dept', N'PPIC&生产', 7),
-('dept', N'采购/质量', 8),
-('dept', N'质量/研发', 9),
-('dept', N'研发/质量', 10),
--- 处理方案
-('action_plan', N'冻结', 1),
-('action_plan', N'退货', 2),
-('action_plan', N'转内贸退货', 3),
-('action_plan', N'特采释放', 4),
-('action_plan', N'料废外卖', 5),
-('action_plan', N'按呆滞料流程处理', 6),
-('action_plan', N'绕卷', 7),
-('action_plan', N'重新绕卷', 8),
-('action_plan', N'索赔', 9),
-('action_plan', N'索赔后绕卷', 10),
-('action_plan', N'试机纸', 11),
-('action_plan', N'测试时领用', 12),
-('action_plan', N'待使用完毕一起投诉', 13),
-('action_plan', N'其他', 99),
--- 处理状态
+-- 处理状态（唯一保留的枚举）
 ('action_status', N'待处理', 1),
 ('action_status', N'讨论中', 2),
 ('action_status', N'进行中', 3),
@@ -435,7 +407,7 @@ GET    /api/actions/export          导出处理记录为 Excel
 #### 枚举配置模块
 
 ```
-GET    /api/enums/{enum_type}       获取枚举选项列表（dept/action_plan/action_status）
+GET    /api/enums/{enum_type}       获取枚举选项列表（action_status）
 POST   /api/enums                   新增枚举值（admin）
 ```
 
@@ -520,8 +492,8 @@ PUT    /api/users/{id}              更新用户
 
 | 字段 | 控件类型 | 必填 |
 |------|----------|------|
-| 责任部门 | 下拉选择 | ✅ |
-| 处理方案 | 下拉选择 | ✅ |
+| 责任部门 | 文本输入框 | ❌ |
+| 处理方案 | 文本输入框 | ❌ |
 | 处理状态 | 下拉选择 | ✅ |
 | 线下原因补充说明 | 多行文本框 | ❌ |
 | 备注 | 多行文本框（投诉单号等） | ❌ |
@@ -538,7 +510,7 @@ PUT    /api/users/{id}              更新用户
 - 与库存明细类似的表格，但默认预筛选：
   - 仅显示 is_abnormal = 1 的批次
   - 如果是 user 角色，进一步筛选 responsible_dept = 当前用户部门 OR action_status IS NULL（未分配的也展示）
-- 支持快速批量操作：勾选多个批次 → 批量设置责任部门
+- 支持快速批量操作：勾选多个批次 → 批量填写责任部门
 
 #### 页面5：数据上传 `/admin/upload`
 

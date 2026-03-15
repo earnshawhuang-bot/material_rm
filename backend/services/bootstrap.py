@@ -12,36 +12,8 @@ from ..database import SessionLocal
 from .. import models
 
 
-DEPT_ENUMS = [
-    "采购",
-    "质量",
-    "研发",
-    "生产",
-    "PPIC&仓库",
-    "PPIC&质量",
-    "PPIC&生产",
-    "采购/质量",
-    "质量/研发",
-    "研发/质量",
-]
-
-PLAN_ENUMS = [
-    "冻结",
-    "退货",
-    "转内贸退货",
-    "特采释放",
-    "料废外卖",
-    "按呆滞料流程处理",
-    "绕卷",
-    "重新绕卷",
-    "索赔",
-    "索赔后绕卷",
-    "试机纸",
-    "测试时领用",
-    "待使用完毕一起投诉",
-    "其他",
-]
-
+# 责任部门和处理方案已改为自由文本输入，不再使用枚举。
+# 仅保留处理状态的枚举。
 STATUS_ENUMS = ["待处理", "讨论中", "进行中", "待定", "已完成", "已关闭"]
 
 
@@ -61,28 +33,12 @@ def _seed_admin(db: Session) -> None:
 
 
 def _seed_enums(db: Session) -> None:
-    if db.query(models.SysEnumConfig).count() > 0:
+    """仅播种处理状态枚举。"""
+    existing = db.query(models.SysEnumConfig).filter(
+        models.SysEnumConfig.enum_type == "action_status"
+    ).count()
+    if existing > 0:
         return
-    order = 1
-    for value in DEPT_ENUMS:
-        db.add(
-            models.SysEnumConfig(
-                enum_type="dept",
-                enum_value=value,
-                sort_order=order,
-            )
-        )
-        order += 1
-
-    for i, value in enumerate(PLAN_ENUMS, start=1):
-        db.add(
-            models.SysEnumConfig(
-                enum_type="action_plan",
-                enum_value=value,
-                sort_order=i,
-            )
-        )
-
     for i, value in enumerate(STATUS_ENUMS, start=1):
         db.add(
             models.SysEnumConfig(

@@ -455,6 +455,31 @@
                     <p id="mapping-msg" class="text-[11px] mt-3 text-slate-400"></p>
                     <p id="mapping-summary" class="text-[11px] mt-1 text-slate-400 italic"></p>
                 </div>
+
+                <!-- Action Import -->
+                <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                    <div class="flex items-center gap-3 mb-5">
+                        <div class="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-800">离线处理记录导入</h3>
+                            <p class="text-[11px] text-slate-400">将线下 Excel 中的行动项导入系统（仅匹配异常批次）</p>
+                        </div>
+                    </div>
+                    <form id="action-import-form" class="space-y-4">
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1.5">快照月</label>
+                            <input id="action-import-month" type="month" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-500">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1.5">线下处理记录 Excel</label>
+                            <input id="action-import-file" type="file" accept=".xlsx,.xls" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-emerald-50 file:text-emerald-600 hover:file:bg-emerald-100 cursor-pointer">
+                        </div>
+                        <button type="submit" class="w-full bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-700 transition-colors">导入处理记录</button>
+                    </form>
+                    <p id="action-import-msg" class="text-[11px] mt-3 text-slate-400"></p>
+                </div>
             </div>
 
             <div id="unmatched-panel" class="hidden mt-6">
@@ -487,8 +512,60 @@
                     </table>
                 </div>
             </div>
+
+            <!-- User Management -->
+            <div class="mt-6 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                <div class="flex items-center gap-3 mb-5">
+                    <div class="w-9 h-9 rounded-xl bg-violet-50 flex items-center justify-center">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-800">用户管理</h3>
+                        <p class="text-[11px] text-slate-400">创建、编辑用户账号和权限</p>
+                    </div>
+                </div>
+
+                <!-- New User Form -->
+                <form id="user-create-form" class="mb-5 p-4 bg-slate-50 rounded-xl">
+                    <h4 class="text-xs font-bold text-slate-600 mb-3">新增用户</h4>
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                        <input id="uc-username" type="text" placeholder="用户名 *" class="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-violet-500">
+                        <input id="uc-password" type="password" placeholder="密码 *" class="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-violet-500">
+                        <input id="uc-display" type="text" placeholder="显示名称" class="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-violet-500">
+                        <input id="uc-dept" type="text" placeholder="部门" class="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-violet-500">
+                        <input id="uc-plant" type="text" placeholder="工厂" class="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-violet-500">
+                        <select id="uc-role" class="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-violet-500">
+                            <option value="user">普通用户</option>
+                            <option value="admin">管理员</option>
+                        </select>
+                    </div>
+                    <div class="mt-3 flex items-center gap-3">
+                        <button type="submit" class="bg-violet-600 text-white text-xs font-bold px-4 py-1.5 rounded-lg hover:bg-violet-700">创建用户</button>
+                        <span id="user-create-msg" class="text-[11px] text-slate-400"></span>
+                    </div>
+                </form>
+
+                <!-- User List Table -->
+                <div class="overflow-x-auto rounded-xl border border-slate-100">
+                    <table class="w-full text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-600">
+                                <th class="px-3 py-2 text-left font-semibold">ID</th>
+                                <th class="px-3 py-2 text-left font-semibold">用户名</th>
+                                <th class="px-3 py-2 text-left font-semibold">显示名称</th>
+                                <th class="px-3 py-2 text-left font-semibold">部门</th>
+                                <th class="px-3 py-2 text-left font-semibold">工厂</th>
+                                <th class="px-3 py-2 text-left font-semibold">角色</th>
+                                <th class="px-3 py-2 text-center font-semibold">状态</th>
+                                <th class="px-3 py-2 text-center font-semibold">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="user-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
         </div>
-        
+
         <!-- Footer -->
         <footer class="py-6 text-center text-[10px] text-slate-400 border-t border-slate-100 bg-white">
             &copy; 2026 RM Inventory Analysis System · Designed for Excellence
@@ -504,7 +581,7 @@ const state = {
     token:   localStorage.getItem("rm_token") || "",
     user:    null,
     rows:    [],
-    enums:   { dept: [], plan: [], status: [] },
+    enums:   { status: [] },
     months:  [],
     editBatch: null,
     page:    1,
@@ -562,6 +639,10 @@ function showPage(page) {
     const wasHidden = adminEl.classList.contains("hidden");
     adminEl.className = (!isInventory ? ACTIVE : IDLE);
     if (wasHidden) adminEl.classList.add("hidden");
+
+    if (!isInventory && typeof loadUsers === "function") {
+        loadUsers();
+    }
 }
 
 function statusTag(v) {
@@ -617,13 +698,7 @@ function initResizing() {
 //  CORE LOGIC
 // ══════════════════════════════════════════════════════
 async function loadEnums() {
-    const [dept, plan, statusRes] = await Promise.all([
-        authFetch("/api/enums/dept"),
-        authFetch("/api/enums/action_plan"),
-        authFetch("/api/enums/action_status"),
-    ]);
-    state.enums.dept = dept.items || [];
-    state.enums.plan = plan.items || [];
+    const statusRes = await authFetch("/api/enums/action_status");
     state.enums.status = statusRes.items || [];
 }
 
@@ -837,10 +912,10 @@ function renderEditRow(row) {
                 <input id="e-note" class="t-input" value="${row.reason_note || ""}">
             </td>
             <td class="action-col">
-                <select id="e-dept" class="t-input"><option value="">-</option>${opt(state.enums.dept, row.responsible_dept)}</select>
+                <input id="e-dept" class="t-input" placeholder="责任部门" value="${row.responsible_dept || ""}">
             </td>
             <td class="action-col">
-                <select id="e-plan" class="t-input"><option value="">-</option>${opt(state.enums.plan, row.action_plan)}</select>
+                <input id="e-plan" class="t-input" placeholder="处理方案" value="${row.action_plan || ""}">
             </td>
             <td class="action-col">
                 <select id="e-status" class="t-input">${opt(state.enums.status, row.action_status || "待处理")}</select>
@@ -883,10 +958,6 @@ async function saveAction(batchNo) {
         expected_completion: $("e-date").value || null,
         remark: $("e-remark").value.trim() || null,
     };
-
-    if (!payload.responsible_dept || !payload.action_plan) {
-        alert("责任部门和处理方案必填"); return;
-    }
 
     try {
         await authFetch("/api/actions/save", { method: "POST", body: JSON.stringify(payload) });
@@ -1073,6 +1144,110 @@ $("mapping-form").onsubmit = async (e) => {
         loadInventory();
     } catch (err) {
         $("mapping-msg").textContent = "失败: " + err.message;
+    }
+};
+
+// ── 用户管理 ──────────────────────────────────────
+
+async function loadUsers() {
+    try {
+        const res = await authFetch("/api/users/");
+        const tbody = $("user-tbody");
+        tbody.innerHTML = (res.items || []).map(u => `
+            <tr class="border-t border-slate-100 hover:bg-slate-50">
+                <td class="px-3 py-2 font-mono text-slate-500">${u.id}</td>
+                <td class="px-3 py-2 font-bold text-slate-800">${u.username}</td>
+                <td class="px-3 py-2">${u.display_name || ""}</td>
+                <td class="px-3 py-2">${u.department || ""}</td>
+                <td class="px-3 py-2">${u.plant || ""}</td>
+                <td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${u.role === 'admin' ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-600'}">${u.role}</span></td>
+                <td class="px-3 py-2 text-center">
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${u.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}">${u.is_active ? '启用' : '禁用'}</span>
+                </td>
+                <td class="px-3 py-2 text-center">
+                    <button class="text-xs font-bold ${u.is_active ? 'text-red-500 hover:text-red-700' : 'text-emerald-500 hover:text-emerald-700'}" data-toggle-user="${u.id}" data-active="${u.is_active}">${u.is_active ? '禁用' : '启用'}</button>
+                </td>
+            </tr>
+        `).join("");
+
+        // 绑定启用/禁用按钮
+        tbody.querySelectorAll("[data-toggle-user]").forEach(btn => {
+            btn.onclick = async () => {
+                const uid = btn.dataset.toggleUser;
+                const currentlyActive = btn.dataset.active === "true";
+                try {
+                    await authFetch(`/api/users/${uid}`, {
+                        method: "PUT",
+                        body: JSON.stringify({ is_active: !currentlyActive }),
+                    });
+                    loadUsers();
+                } catch (err) {
+                    alert("操作失败: " + err.message);
+                }
+            };
+        });
+    } catch (err) {
+        console.warn("Failed to load users:", err);
+    }
+}
+
+$("user-create-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const username = $("uc-username").value.trim();
+    const password = $("uc-password").value;
+    if (!username || !password) {
+        $("user-create-msg").textContent = "用户名和密码必填";
+        return;
+    }
+    try {
+        $("user-create-msg").textContent = "创建中...";
+        await authFetch("/api/users/", {
+            method: "POST",
+            body: JSON.stringify({
+                username,
+                password,
+                display_name: $("uc-display").value.trim() || null,
+                department: $("uc-dept").value.trim() || null,
+                plant: $("uc-plant").value.trim() || null,
+                role: $("uc-role").value,
+            }),
+        });
+        $("user-create-msg").textContent = `用户 ${username} 创建成功`;
+        $("uc-username").value = "";
+        $("uc-password").value = "";
+        $("uc-display").value = "";
+        $("uc-dept").value = "";
+        $("uc-plant").value = "";
+        $("uc-role").value = "user";
+        loadUsers();
+    } catch (err) {
+        $("user-create-msg").textContent = "创建失败: " + err.message;
+    }
+};
+
+$("action-import-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const month = $("action-import-month").value;
+    const file = $("action-import-file").files[0];
+    if (!month || !file) {
+        $("action-import-msg").textContent = "请选择月份和文件";
+        return;
+    }
+    const fd = new FormData();
+    fd.append("snapshot_month", month);
+    fd.append("file", file);
+    try {
+        $("action-import-msg").textContent = "导入中...";
+        const res = await authFetch("/api/upload/action-import", { method: "POST", body: fd });
+        let msg = `导入完成: 匹配 ${res.matched} 条, 跳过 ${res.skipped} 条`;
+        if (res.errors > 0) msg += `, 错误 ${res.errors} 条`;
+        $("action-import-msg").textContent = msg;
+        if (res.error_details && res.error_details.length > 0) {
+            $("action-import-msg").textContent += "\n" + res.error_details.join("\n");
+        }
+        loadInventory();
+    } catch (err) {
+        $("action-import-msg").textContent = "导入失败: " + err.message;
     }
 };
 
