@@ -205,70 +205,135 @@
             </div>
         </header>
 
-        <!-- ─── PAGE: DASHBOARD ─── -->
-        <div id="page-dashboard" class="flex-1 p-6 max-w-[1800px] mx-auto w-full space-y-6">
-            <!-- Header + Month -->
-            <div class="flex items-center justify-between">
-                <h2 class="text-lg font-bold text-slate-800">Dashboard Overview</h2>
-                <div class="flex items-center gap-2">
-                    <span class="text-xs font-bold text-slate-500">月份</span>
-                    <select id="dash-month" class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-indigo-500"></select>
+        <!-- ─── PAGE: DASHBOARD v2 — GM 决策级 ─── -->
+        <div id="page-dashboard" class="flex-1 p-6 max-w-[1800px] mx-auto w-full space-y-5">
+            <!-- Header: Title + Filters -->
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <h2 class="text-lg font-bold text-slate-800">GM Dashboard</h2>
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-xs font-bold text-slate-500">工厂</span>
+                        <select id="dash-plant" class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-indigo-500">
+                            <option value="">全部</option>
+                            <option value="KS">KS (昆山)</option>
+                            <option value="IDN">IDN (印尼)</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-xs font-bold text-slate-500">月份</span>
+                        <select id="dash-month" class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-indigo-500"></select>
+                    </div>
                 </div>
             </div>
-            <!-- Zone 1: KPI Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+            <!-- Layer 0: 智能摘要 -->
+            <div id="dash-summary" class="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-100 rounded-xl px-5 py-3 text-sm text-slate-700 leading-relaxed"></div>
+
+            <!-- Layer 1: KPI Cards (4张) -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div class="kpi-card">
-                    <p class="text-xs text-slate-400 font-medium mb-1">异常率 Abnormal Rate</p>
-                    <div class="flex items-end gap-2">
-                        <span id="kpi-rate" class="kpi-value text-red-600">—</span>
-                        <span id="kpi-trend" class="text-sm font-bold mb-1"></span>
+                    <p class="text-[11px] text-slate-400 font-medium mb-1">异常金额 Abnormal Amount</p>
+                    <div class="flex items-end gap-1.5">
+                        <span id="kpi-amount" class="kpi-value text-red-600">—</span>
+                        <span class="text-[10px] font-bold text-slate-400 mb-1">万元</span>
                     </div>
-                    <p id="kpi-rate-sub" class="text-[11px] text-slate-400 mt-1"></p>
+                    <p id="kpi-amount-trend" class="text-[11px] mt-1"></p>
                 </div>
                 <div class="kpi-card">
-                    <p class="text-xs text-slate-400 font-medium mb-1">异常金额 Abnormal Amount</p>
-                    <div class="flex items-end gap-2">
-                        <span id="kpi-amount" class="kpi-value text-slate-800">—</span>
-                        <span class="text-xs font-bold text-slate-400 mb-1">万元 (CNY)</span>
+                    <p class="text-[11px] text-slate-400 font-medium mb-1">异常率 Abnormal Rate</p>
+                    <div class="flex items-end gap-1.5">
+                        <span id="kpi-rate" class="kpi-value text-slate-800">—</span>
                     </div>
-                    <p id="kpi-amount-sub" class="text-[11px] text-slate-400 mt-1"></p>
+                    <p id="kpi-rate-trend" class="text-[11px] mt-1"></p>
                 </div>
                 <div class="kpi-card">
-                    <p class="text-xs text-slate-400 font-medium mb-1">处理关闭率 Closure Rate</p>
-                    <div class="flex items-end gap-2">
+                    <p class="text-[11px] text-slate-400 font-medium mb-1">处理关闭率 Closure Rate</p>
+                    <div class="flex items-end gap-1.5">
                         <span id="kpi-closure" class="kpi-value text-indigo-600">—</span>
                     </div>
                     <p id="kpi-closure-sub" class="text-[11px] text-slate-400 mt-1"></p>
                 </div>
+                <div class="kpi-card">
+                    <p class="text-[11px] text-slate-400 font-medium mb-1">行动覆盖率 Coverage</p>
+                    <div class="flex items-end gap-1.5">
+                        <span id="kpi-coverage" class="kpi-value text-amber-600">—</span>
+                    </div>
+                    <p id="kpi-coverage-sub" class="text-[11px] text-slate-400 mt-1"></p>
+                </div>
             </div>
-            <!-- Zone 2: Distribution (2x2) -->
+
+            <!-- Layer 2a: 异常物料深度拆解 -->
+            <div class="flex items-center gap-2 mt-2">
+                <div class="h-px flex-1 bg-red-100"></div>
+                <span class="text-xs font-bold text-red-500 whitespace-nowrap">异常物料深度拆解</span>
+                <div class="h-px flex-1 bg-red-100"></div>
+            </div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div class="chart-card">
-                    <h3 class="text-sm font-bold text-slate-700 mb-2">按 RM 类型 By Category</h3>
+                    <h3 class="text-sm font-bold text-slate-700 mb-2">品类 × 金额 Category by Amount</h3>
                     <div id="ch-category" class="chart-box"></div>
                 </div>
                 <div class="chart-card">
-                    <h3 class="text-sm font-bold text-slate-700 mb-2">按库龄 By Aging</h3>
-                    <div id="ch-aging" class="chart-box"></div>
+                    <h3 class="text-sm font-bold text-slate-700 mb-2">工厂对标 Plant Compare</h3>
+                    <div id="ch-plant" class="chart-box"></div>
                 </div>
                 <div class="chart-card">
-                    <h3 class="text-sm font-bold text-slate-700 mb-2">按工厂 By Plant</h3>
-                    <div id="ch-plant" class="chart-box"></div>
+                    <h3 class="text-sm font-bold text-slate-700 mb-2">供应商 Top10 (金额排序)</h3>
+                    <div id="ch-supplier" class="chart-box-lg"></div>
+                </div>
+                <div class="chart-card">
+                    <h3 class="text-sm font-bold text-slate-700 mb-2">月度趋势 Monthly Trend</h3>
+                    <div id="ch-trend" class="chart-box-lg"></div>
+                </div>
+            </div>
+            <!-- 2x2: aging + status -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div class="chart-card">
+                    <h3 class="text-sm font-bold text-slate-700 mb-2">异常库龄 × 金额 Aging</h3>
+                    <div id="ch-aging" class="chart-box"></div>
                 </div>
                 <div class="chart-card">
                     <h3 class="text-sm font-bold text-slate-700 mb-2">处理状态 Action Status</h3>
                     <div id="ch-status" class="chart-box"></div>
                 </div>
             </div>
-            <!-- Zone 3: Details (1x2) -->
+
+            <!-- Layer 2b: 正常物料健康度 -->
+            <div class="flex items-center gap-2 mt-2">
+                <div class="h-px flex-1 bg-green-100"></div>
+                <span class="text-xs font-bold text-green-600 whitespace-nowrap">正常物料健康度监控</span>
+                <div class="h-px flex-1 bg-green-100"></div>
+            </div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div class="chart-card">
-                    <h3 class="text-sm font-bold text-slate-700 mb-2">供应商 Top 10 Supplier</h3>
-                    <div id="ch-supplier" class="chart-box-lg"></div>
+                    <h3 class="text-sm font-bold text-slate-700 mb-2">正常物料库龄分布</h3>
+                    <div id="ch-normal-aging" class="chart-box"></div>
                 </div>
                 <div class="chart-card">
-                    <h3 class="text-sm font-bold text-slate-700 mb-2">月度趋势 Monthly Trend</h3>
-                    <div id="ch-trend" class="chart-box-lg"></div>
+                    <h3 class="text-sm font-bold text-slate-700 mb-2">品类 × 库龄 热力图</h3>
+                    <div id="ch-heatmap" class="chart-box"></div>
+                </div>
+            </div>
+
+            <!-- Layer 3: 行动追踪 -->
+            <div class="flex items-center gap-2 mt-2">
+                <div class="h-px flex-1 bg-amber-100"></div>
+                <span class="text-xs font-bold text-amber-600 whitespace-nowrap">行动追踪 Action Tracking</span>
+                <div class="h-px flex-1 bg-amber-100"></div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <!-- 逾期未处理 -->
+                <div class="chart-card">
+                    <h3 class="text-sm font-bold text-slate-700 mb-2">
+                        逾期未处理 Overdue
+                        <span id="overdue-badge" class="ml-2 text-xs font-bold text-white bg-red-500 rounded-full px-2 py-0.5"></span>
+                    </h3>
+                    <div id="overdue-table" class="overflow-auto max-h-[300px] text-xs"></div>
+                </div>
+                <!-- 责任部门完成率 -->
+                <div class="chart-card">
+                    <h3 class="text-sm font-bold text-slate-700 mb-2">责任部门完成率 Dept Closure</h3>
+                    <div id="ch-dept" class="chart-box"></div>
                 </div>
             </div>
         </div>
@@ -1090,37 +1155,76 @@ function logout() {
 }
 
 // ══════════════════════════════════════════════════════
-//  DASHBOARD
+//  DASHBOARD v2 — GM 决策级
 // ══════════════════════════════════════════════════════
 async function loadDashboard() {
     const month = $("dash-month").value;
     if (!month) return;
+    const plantVal = $("dash-plant").value;
+    const qs = `month=${month}` + (plantVal ? `&plant=${plantVal}` : "");
     try {
-        const d = await authFetch(`/api/dashboard/overview?month=${month}`);
+        const d = await authFetch(`/api/dashboard/overview?${qs}`);
+        renderDashSummary(d);
         renderDashKPIs(d);
         renderDashCharts(d);
+        renderOverdueTable(d);
     } catch (err) { console.error("Dashboard load failed:", err); }
 }
 
-function renderDashKPIs(d) {
-    // Abnormal rate
-    $("kpi-rate").textContent = d.abnormal_rate + "%";
-    $("kpi-rate-sub").textContent = `${d.abnormal_weight_tons.toLocaleString()} t 异常 / ${d.total_weight_tons.toLocaleString()} t 总重量`;
-    const tr = $("kpi-trend");
+function _wan(v) { return (v / 10000).toFixed(1); }
+function _trendTag(curr, prev, unit, invert) {
+    if (prev == null) return '<span class="text-slate-400">无上月数据</span>';
+    const diff = curr - prev;
+    const arrow = diff > 0 ? "+" : "";
+    const bad = invert ? diff < 0 : diff > 0;
+    const cls = bad ? "kpi-trend-up" : diff === 0 ? "text-slate-400" : "kpi-trend-down";
+    return `<span class="${cls}">${arrow}${diff.toFixed(1)}${unit} vs 上月</span>`;
+}
+
+function renderDashSummary(d) {
+    const el = $("dash-summary");
+    const topCat = d.by_category.length ? d.by_category[0] : null;
+    const topSup = d.supplier_top10.length ? d.supplier_top10[0] : null;
+    const recurSups = d.supplier_top10.filter(s => s.is_recurring);
+    const normalDE = d.normal_by_aging.filter(a => a.aging_category === "D" || a.aging_category === "E");
+    const normDEtons = normalDE.reduce((s,a) => s + a.weight_tons, 0).toFixed(0);
+    const normDEcnt = normalDE.reduce((s,a) => s + a.batch_count, 0);
+
+    let parts = [];
+    parts.push(`本月异常金额 <b class="text-red-600">¥${_wan(d.abnormal_amount_cny)}万</b>，异常率 <b>${d.abnormal_rate}%</b>`);
     if (d.abnormal_rate_prev != null) {
         const diff = d.abnormal_rate - d.abnormal_rate_prev;
-        tr.className = `text-sm font-bold mb-1 ${diff > 0 ? "kpi-trend-up" : diff < 0 ? "kpi-trend-down" : "text-slate-400"}`;
-        tr.textContent = `${diff > 0 ? "+" : ""}${diff.toFixed(1)}% vs 上月`;
-    } else { tr.textContent = ""; }
+        parts[0] += diff > 0 ? `（较上月<b class="text-red-500">上升${diff.toFixed(1)}pp</b>）` : diff < 0 ? `（较上月<b class="text-green-600">下降${Math.abs(diff).toFixed(1)}pp</b>）` : "（与上月持平）";
+    }
+    if (topCat) parts.push(`主要异常品类：<b>${topCat.name}</b>（¥${_wan(topCat.amount_cny)}万，占${d.abnormal_amount_cny > 0 ? (topCat.amount_cny/d.abnormal_amount_cny*100).toFixed(0) : 0}%）`);
+    if (topSup) parts.push(`最大问题供应商：<b>${topSup.supplier_name}</b>（¥${_wan(topSup.amount_cny)}万 / ${topSup.batch_count}批）`);
+    if (recurSups.length > 0) parts.push(`<span class="text-red-500"><b>${recurSups.length}</b>家供应商连续两月出现异常</span>`);
+    if (d.overdue_count > 0) parts.push(`<span class="text-amber-600"><b>${d.overdue_count}</b>批逾期未处理（¥${_wan(d.overdue_amount_cny)}万）</span>`);
+    if (normDEcnt > 0) parts.push(`正常物料中 D+E 类（>180天）有 <b>${normDEcnt}</b> 批 / ${normDEtons} 吨需关注`);
 
-    // Amount (万元)
-    const wan = d.abnormal_amount_cny / 10000;
-    $("kpi-amount").textContent = wan >= 1 ? wan.toFixed(1) : wan.toFixed(2);
-    $("kpi-amount-sub").textContent = `¥${d.abnormal_amount_cny.toLocaleString(undefined, {maximumFractionDigits:0})} (IDR 按 1:2300 折算)`;
+    el.innerHTML = parts.join("。<br>");
+}
 
-    // Closure rate
+function renderDashKPIs(d) {
+    // Amount
+    $("kpi-amount").textContent = _wan(d.abnormal_amount_cny);
+    $("kpi-amount-trend").innerHTML = _trendTag(d.abnormal_amount_cny/10000, d.abnormal_amount_prev != null ? d.abnormal_amount_prev/10000 : null, "万", false);
+
+    // Rate
+    $("kpi-rate").textContent = d.abnormal_rate + "%";
+    $("kpi-rate-trend").innerHTML = _trendTag(d.abnormal_rate, d.abnormal_rate_prev, "pp", false);
+
+    // Closure
     $("kpi-closure").textContent = d.action_closure_rate + "%";
+    const closureCls = d.action_closure_rate >= 80 ? "text-green-600" : d.action_closure_rate >= 50 ? "text-amber-500" : "text-red-500";
+    $("kpi-closure").className = `kpi-value ${closureCls}`;
     $("kpi-closure-sub").textContent = `${d.action_done} 已关闭 / ${d.action_total} 行动项`;
+
+    // Coverage
+    $("kpi-coverage").textContent = d.coverage_rate + "%";
+    const covCls = d.coverage_rate >= 80 ? "text-green-600" : d.coverage_rate >= 50 ? "text-amber-500" : "text-red-500";
+    $("kpi-coverage").className = `kpi-value ${covCls}`;
+    $("kpi-coverage-sub").textContent = `索赔回收 ¥${_wan(d.claim_total_cny)}万 (${d.claim_recovery_rate}%)`;
 }
 
 function _ch(id) {
@@ -1131,92 +1235,219 @@ function _ch(id) {
 }
 
 function renderDashCharts(d) {
-    // ── Category (donut) ──
+    // ── Category × Amount (horizontal bar, sorted by amount) ──
     const c1 = _ch("ch-category");
+    const catRev = [...d.by_category].reverse();
     c1.setOption({
-        tooltip: { trigger: "item", formatter: "{b}: {c} t ({d}%)" },
-        legend: { bottom: 0, textStyle: { fontSize: 11 } },
-        color: ["#6366f1","#f59e0b","#10b981","#ef4444","#8b5cf6"],
-        series: [{ type: "pie", radius: ["40%","70%"], center: ["50%","45%"],
-            label: { show: true, formatter: "{b}\n{c} t", fontSize: 11 },
-            data: d.by_category.map(i => ({ name: i.name, value: i.weight_tons })),
+        tooltip: { trigger: "axis", formatter: p => {
+            const it = catRev[p[0].dataIndex];
+            return `${p[0].name}<br/>金额: ¥${_wan(it.amount_cny)}万<br/>重量: ${it.weight_tons} t`;
+        }},
+        grid: { left: 80, right: 80, top: 10, bottom: 30 },
+        xAxis: { type: "value", axisLabel: { formatter: v => "¥" + _wan(v) + "万" } },
+        yAxis: { type: "category", data: catRev.map(i => i.name), axisLabel: { fontSize: 12, fontWeight: "bold" } },
+        color: ["#ef4444"],
+        series: [{ type: "bar", data: catRev.map(i => i.amount_cny), barWidth: 28,
+            label: { show: true, position: "right", fontSize: 11, formatter: p => "¥" + _wan(p.value) + "万" },
+            itemStyle: { borderRadius: [0,4,4,0], color: new echarts.graphic.LinearGradient(0,0,1,0, [{offset:0,color:"#fca5a5"},{offset:1,color:"#ef4444"}]) },
         }],
     });
 
-    // ── Aging (horizontal bar) ──
+    // ── Plant Compare (grouped bar: total vs abnormal + rate line) ──
+    const c3 = _ch("ch-plant");
+    const plantNames = d.by_plant.map(i => i.plant_group);
+    c3.setOption({
+        tooltip: { trigger: "axis" },
+        legend: { data: ["总库存(t)","异常(t)","异常率%"], top: 0, textStyle: { fontSize: 10 } },
+        grid: { left: 50, right: 55, top: 35, bottom: 25 },
+        xAxis: { type: "category", data: plantNames, axisLabel: { fontSize: 12, fontWeight: "bold" } },
+        yAxis: [
+            { type: "value", name: "吨", nameTextStyle: { fontSize: 10 } },
+            { type: "value", name: "%", nameTextStyle: { fontSize: 10 }, max: v => Math.ceil(v.max * 1.2) },
+        ],
+        color: ["#c7d2fe","#ef4444","#f59e0b"],
+        series: [
+            { name: "总库存(t)", type: "bar", data: d.by_plant.map(i => i.total_weight_tons), barWidth: 30, itemStyle: { borderRadius: [4,4,0,0] },
+              label: { show: true, position: "top", fontSize: 10, formatter: "{c}t" } },
+            { name: "异常(t)", type: "bar", data: d.by_plant.map(i => i.abnormal_weight_tons), barWidth: 30, itemStyle: { borderRadius: [4,4,0,0] },
+              label: { show: true, position: "top", fontSize: 10, color: "#ef4444", formatter: "{c}t" } },
+            { name: "异常率%", type: "line", yAxisIndex: 1, data: d.by_plant.map(i => i.abnormal_rate), symbol: "circle", symbolSize: 10, lineStyle: { width: 2 },
+              label: { show: true, fontSize: 11, fontWeight: "bold", formatter: "{c}%" } },
+        ],
+    });
+
+    // ── Supplier Top10 (horizontal bar with recurring tag) ──
+    const c5 = _ch("ch-supplier");
+    const supRev = [...d.supplier_top10].reverse();
+    c5.setOption({
+        tooltip: { trigger: "axis", formatter: p => {
+            const it = supRev[p[0].dataIndex];
+            return `${it.supplier_name}<br/>金额: ¥${_wan(it.amount_cny)}万<br/>${it.batch_count}批 / ${it.weight_tons}t${it.is_recurring ? "<br/><b style='color:#ef4444'>连续复发</b>" : ""}`;
+        }},
+        grid: { left: 160, right: 80, top: 10, bottom: 30 },
+        xAxis: { type: "value", axisLabel: { formatter: v => "¥" + _wan(v) + "万" } },
+        yAxis: { type: "category", data: supRev.map(i => {
+            let n = i.supplier_name.length > 14 ? i.supplier_name.slice(0,14)+"…" : i.supplier_name;
+            return i.is_recurring ? n + " *" : n;
+        }), axisLabel: { fontSize: 10, formatter: v => v.endsWith(" *") ? "{recurring|" + v + "}" : v,
+            rich: { recurring: { color: "#ef4444", fontWeight: "bold" } } } },
+        color: ["#6366f1"],
+        series: [{ type: "bar", data: supRev.map(i => ({
+            value: i.amount_cny,
+            itemStyle: { color: i.is_recurring ? "#ef4444" : "#6366f1", borderRadius: [0,4,4,0] }
+        })), barWidth: 18, label: { show: true, position: "right", fontSize: 10, formatter: p => "¥" + _wan(p.value) + "万" } }],
+    });
+
+    // ── Monthly Trend (bar amount + line rate) ──
+    const c6 = _ch("ch-trend");
+    c6.setOption({
+        tooltip: { trigger: "axis", formatter: p => {
+            let s = p[0].axisValue;
+            p.forEach(i => { s += `<br/>${i.marker} ${i.seriesName}: ${i.seriesName.includes("率") ? i.value+"%" : "¥"+_wan(i.value)+"万"}`; });
+            return s;
+        }},
+        legend: { data: ["异常金额(万)","异常率%"], top: 0, textStyle: { fontSize: 11 } },
+        grid: { left: 65, right: 55, top: 35, bottom: 30 },
+        xAxis: { type: "category", data: d.monthly_trend.map(i => i.month), axisLabel: { fontSize: 11 } },
+        yAxis: [
+            { type: "value", name: "万元", nameTextStyle: { fontSize: 10 }, axisLabel: { formatter: v => _wan(v*10000) } },
+            { type: "value", name: "%", nameTextStyle: { fontSize: 10 }, max: v => Math.ceil(v.max * 1.3) },
+        ],
+        color: ["#6366f1","#ef4444"],
+        series: [
+            { name: "异常金额(万)", type: "bar", data: d.monthly_trend.map(i => i.abnormal_amount_cny), barWidth: 35,
+              itemStyle: { borderRadius: [4,4,0,0] }, label: { show: true, position: "top", fontSize: 10, formatter: p => "¥" + _wan(p.value) + "万" } },
+            { name: "异常率%", type: "line", yAxisIndex: 1, data: d.monthly_trend.map(i => i.abnormal_rate), smooth: true, symbol: "circle", symbolSize: 8, lineStyle: { width: 2.5 },
+              label: { show: true, fontSize: 11, fontWeight: "bold", formatter: "{c}%" } },
+        ],
+    });
+
+    // ── Aging × Amount (异常) ──
     const c2 = _ch("ch-aging");
     const ageSorted = [...d.by_aging].sort((a,b) => a.aging_category.localeCompare(b.aging_category));
+    const AC = ["#10b981","#3b82f6","#f59e0b","#f97316","#ef4444"];
     c2.setOption({
-        tooltip: { trigger: "axis", formatter: p => `${p[0].name}: ${p[0].value} t` },
-        grid: { left: 100, right: 40, top: 10, bottom: 30 },
+        tooltip: { trigger: "axis", formatter: p => `${p[0].name}<br/>金额: ¥${_wan(d.by_aging.find(a=>a.label===p[0].name)?.amount_cny||0)}万<br/>重量: ${p[0].value} t` },
+        grid: { left: 100, right: 80, top: 10, bottom: 30 },
         xAxis: { type: "value", axisLabel: { formatter: v => v + " t" } },
         yAxis: { type: "category", data: ageSorted.map(i => i.label), inverse: true, axisLabel: { fontSize: 11 } },
         series: [{ type: "bar", data: ageSorted.map((i,idx) => ({
             value: i.weight_tons,
-            itemStyle: { color: ["#10b981","#3b82f6","#f59e0b","#f97316","#ef4444"][idx] || "#6366f1", borderRadius: [0,4,4,0] }
-        })), barWidth: 22, label: { show: true, position: "right", fontSize: 11, formatter: "{c} t" } }],
+            itemStyle: { color: AC[idx] || "#6366f1", borderRadius: [0,4,4,0] }
+        })), barWidth: 22, label: { show: true, position: "right", fontSize: 11, formatter: p => {
+            const it = ageSorted[p.dataIndex];
+            return `${p.value}t / ¥${_wan(it.amount_cny)}万`;
+        } } }],
     });
 
-    // ── Plant (donut) ──
-    const c3 = _ch("ch-plant");
-    c3.setOption({
-        tooltip: { trigger: "item", formatter: p => {
-            const it = d.by_plant[p.dataIndex];
-            return `${p.name}: ${p.value} t (${p.percent}%)<br/>金额: ¥${(it.amount_cny/10000).toFixed(1)} 万`;
-        }},
-        legend: { bottom: 0, textStyle: { fontSize: 11 } },
-        color: ["#6366f1","#f59e0b"],
-        series: [{ type: "pie", radius: ["40%","70%"], center: ["50%","45%"],
-            label: { show: true, formatter: "{b}\n{c} t", fontSize: 12, fontWeight: "bold" },
-            data: d.by_plant.map(i => ({ name: i.plant_group, value: i.weight_tons })),
-        }],
-    });
-
-    // ── Action Status (horizontal bar) ──
+    // ── Action Status ──
     const c4 = _ch("ch-status");
     const SC = {"待处理":"#94a3b8","讨论中":"#3b82f6","进行中":"#f59e0b","待定":"#8b5cf6","已完成":"#10b981","已关闭":"#6b7280"};
     c4.setOption({
-        tooltip: { trigger: "axis", formatter: p => `${p[0].name}: ${p[0].value} t` },
-        grid: { left: 80, right: 40, top: 10, bottom: 30 },
+        tooltip: { trigger: "axis", formatter: p => `${p[0].name}: ${d.by_action_status.find(a=>a.status===p[0].name)?.count||0}批 / ${p[0].value} t` },
+        grid: { left: 80, right: 60, top: 10, bottom: 30 },
         xAxis: { type: "value", axisLabel: { formatter: v => v + " t" } },
         yAxis: { type: "category", data: d.by_action_status.map(i => i.status), axisLabel: { fontSize: 11 } },
         series: [{ type: "bar", data: d.by_action_status.map(i => ({
             value: i.weight_tons, itemStyle: { color: SC[i.status] || "#94a3b8", borderRadius: [0,4,4,0] }
-        })), barWidth: 22, label: { show: true, position: "right", fontSize: 11, formatter: "{c} t" } }],
+        })), barWidth: 22, label: { show: true, position: "right", fontSize: 11, formatter: p => {
+            const it = d.by_action_status[p.dataIndex];
+            return `${it.count}批 / ${p.value}t`;
+        } } }],
     });
 
-    // ── Supplier Top 10 (horizontal bar) ──
-    const c5 = _ch("ch-supplier");
-    const supRev = [...d.supplier_top10].reverse();
-    c5.setOption({
-        tooltip: { trigger: "axis" },
-        grid: { left: 160, right: 50, top: 10, bottom: 30 },
+    // ── Normal Aging (stacked bar: weight + amount overlay) ──
+    const c7 = _ch("ch-normal-aging");
+    const normAging = d.normal_by_aging;
+    c7.setOption({
+        tooltip: { trigger: "axis", formatter: p => {
+            const it = normAging[p[0].dataIndex];
+            return `${p[0].name}<br/>重量: ${it.weight_tons} t<br/>金额: ¥${_wan(it.amount_cny)}万<br/>批次: ${it.batch_count}`;
+        }},
+        grid: { left: 100, right: 80, top: 10, bottom: 30 },
         xAxis: { type: "value", axisLabel: { formatter: v => v + " t" } },
-        yAxis: { type: "category", data: supRev.map(i => i.supplier_name.length > 14 ? i.supplier_name.slice(0,14)+"…" : i.supplier_name), axisLabel: { fontSize: 10 } },
-        color: ["#6366f1"],
-        series: [{ type: "bar", data: supRev.map(i => i.weight_tons), barWidth: 18,
-            label: { show: true, position: "right", fontSize: 11, formatter: "{c} t" },
-            itemStyle: { borderRadius: [0,4,4,0] },
-        }],
+        yAxis: { type: "category", data: normAging.map(i => i.label), inverse: true, axisLabel: { fontSize: 11 } },
+        series: [{ type: "bar", data: normAging.map((i,idx) => ({
+            value: i.weight_tons,
+            itemStyle: { color: ["#10b981","#34d399","#fbbf24","#f97316","#ef4444"][idx] || "#94a3b8", borderRadius: [0,4,4,0] }
+        })), barWidth: 22, label: { show: true, position: "right", fontSize: 10, formatter: p => {
+            const it = normAging[p.dataIndex];
+            return `${it.batch_count}批 / ${p.value}t / ¥${_wan(it.amount_cny)}万`;
+        } } }],
     });
 
-    // ── Monthly Trend (bar + line dual axis) ──
-    const c6 = _ch("ch-trend");
-    c6.setOption({
-        tooltip: { trigger: "axis" },
-        legend: { data: ["异常重量(t)","异常率%"], top: 0, textStyle: { fontSize: 11 } },
-        grid: { left: 60, right: 60, top: 35, bottom: 30 },
-        xAxis: { type: "category", data: d.monthly_trend.map(i => i.month), axisLabel: { fontSize: 11 } },
-        yAxis: [
-            { type: "value", name: "吨", nameTextStyle: { fontSize: 10 } },
-            { type: "value", name: "%", nameTextStyle: { fontSize: 10 }, max: 100 },
-        ],
-        color: ["#6366f1","#ef4444"],
-        series: [
-            { name: "异常重量(t)", type: "bar", data: d.monthly_trend.map(i => i.abnormal_weight_tons), barWidth: 30, itemStyle: { borderRadius: [4,4,0,0] } },
-            { name: "异常率%", type: "line", yAxisIndex: 1, data: d.monthly_trend.map(i => i.abnormal_rate), smooth: true, symbol: "circle", symbolSize: 8, lineStyle: { width: 2 } },
-        ],
+    // ── Heatmap: Category × Aging ──
+    const c8 = _ch("ch-heatmap");
+    const cats = [...new Set(d.normal_category_aging.map(i => i.category))].sort();
+    const agings = ["A","B","C","D","E"];
+    const agingLabels = ["≤30天",">30-90天",">90-180天",">180-360天",">360天"];
+    const hmData = [];
+    let maxVal = 0;
+    d.normal_category_aging.forEach(i => {
+        const x = agings.indexOf(i.aging_category);
+        const y = cats.indexOf(i.category);
+        if (x >= 0 && y >= 0) {
+            hmData.push([x, y, i.weight_tons]);
+            if (i.weight_tons > maxVal) maxVal = i.weight_tons;
+        }
     });
+    c8.setOption({
+        tooltip: { formatter: p => `${cats[p.value[1]]} × ${agingLabels[p.value[0]]}<br/>重量: ${p.value[2]} t` },
+        grid: { left: 70, right: 50, top: 10, bottom: 40 },
+        xAxis: { type: "category", data: agingLabels, axisLabel: { fontSize: 10 }, splitArea: { show: true } },
+        yAxis: { type: "category", data: cats, axisLabel: { fontSize: 11, fontWeight: "bold" } },
+        visualMap: { min: 0, max: maxVal || 1, calculable: true, orient: "horizontal", left: "center", bottom: 0, inRange: { color: ["#e0f2fe","#38bdf8","#f97316","#ef4444"] }, textStyle: { fontSize: 10 }, itemWidth: 12, itemHeight: 80 },
+        series: [{ type: "heatmap", data: hmData, label: { show: true, fontSize: 10, formatter: p => p.value[2] > 0 ? p.value[2] + "t" : "" },
+            emphasis: { itemStyle: { shadowBlur: 10, shadowColor: "rgba(0,0,0,0.5)" } } }],
+    });
+
+    // ── Dept Completion ──
+    const c9 = _ch("ch-dept");
+    if (d.dept_completion.length === 0) {
+        c9.setOption({ title: { text: "暂无责任部门数据", left: "center", top: "center", textStyle: { color: "#94a3b8", fontSize: 14 } } });
+    } else {
+        const depts = d.dept_completion.map(i => i.dept);
+        c9.setOption({
+            tooltip: { trigger: "axis", formatter: p => `${p[0].name}: ${d.dept_completion.find(dc=>dc.dept===p[0].name)?.done||0}/${d.dept_completion.find(dc=>dc.dept===p[0].name)?.total||0} (${p[0].value}%)` },
+            grid: { left: 100, right: 60, top: 10, bottom: 30 },
+            xAxis: { type: "value", max: 100, axisLabel: { formatter: v => v + "%" } },
+            yAxis: { type: "category", data: depts, axisLabel: { fontSize: 10 } },
+            series: [{ type: "bar", data: d.dept_completion.map(i => ({
+                value: i.rate,
+                itemStyle: { color: i.rate >= 80 ? "#10b981" : i.rate >= 50 ? "#f59e0b" : "#ef4444", borderRadius: [0,4,4,0] }
+            })), barWidth: 20, label: { show: true, position: "right", fontSize: 11, fontWeight: "bold", formatter: "{c}%" } }],
+        });
+    }
+}
+
+function renderOverdueTable(d) {
+    const badge = $("overdue-badge");
+    badge.textContent = d.overdue_count;
+    badge.style.display = d.overdue_count > 0 ? "inline" : "none";
+
+    if (d.overdue_items.length === 0) {
+        $("overdue-table").innerHTML = '<div class="text-center text-slate-400 py-8">暂无逾期未处理批次</div>';
+        return;
+    }
+    const plantLabel = p => p === "3301" ? "IDN" : "KS";
+    let html = `<table class="w-full text-xs"><thead><tr class="bg-red-50 text-slate-600">
+        <th class="px-2 py-1.5 text-left">批次号</th><th class="px-2 py-1.5 text-left">物料</th>
+        <th class="px-2 py-1.5">工厂</th><th class="px-2 py-1.5 text-right">金额(万)</th>
+        <th class="px-2 py-1.5">责任部门</th><th class="px-2 py-1.5 text-right">逾期天数</th>
+    </tr></thead><tbody>`;
+    d.overdue_items.forEach(o => {
+        const cls = o.overdue_days > 30 ? "bg-red-50" : "";
+        html += `<tr class="${cls} border-b border-slate-100 hover:bg-slate-50">
+            <td class="px-2 py-1.5 font-mono">${o.batch_no}</td>
+            <td class="px-2 py-1.5 truncate max-w-[120px]" title="${o.material_name || ""}">${(o.material_name||"").slice(0,15)}</td>
+            <td class="px-2 py-1.5 text-center">${plantLabel(o.plant)}</td>
+            <td class="px-2 py-1.5 text-right font-bold text-red-600">¥${_wan(o.amount_cny)}</td>
+            <td class="px-2 py-1.5 text-center">${o.responsible_dept || "-"}</td>
+            <td class="px-2 py-1.5 text-right font-bold ${o.overdue_days > 30 ? "text-red-600" : "text-amber-500"}">${o.overdue_days}天</td>
+        </tr>`;
+    });
+    html += "</tbody></table>";
+    $("overdue-table").innerHTML = html;
 }
 
 window.addEventListener("resize", () => {
@@ -1267,6 +1498,7 @@ $("nav-dashboard").onclick = () => showPage("dashboard");
 $("nav-inventory").onclick = () => showPage("inventory");
 $("nav-admin").onclick = () => showPage("admin");
 $("dash-month").onchange = () => loadDashboard();
+$("dash-plant").onchange = () => loadDashboard();
 
 $("btn-load").onclick = () => { state.page = 1; loadInventory(); };
 $("btn-toggle-unmatched").onclick = () => {

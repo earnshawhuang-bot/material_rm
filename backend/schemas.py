@@ -206,51 +206,107 @@ class StatsResponse(BaseModel):
     completion_rate: float = 0.0   # done / defective * 100, 0 if no defectives
 
 
-# ── Dashboard ──────────────────────────────────────────
+# ── Dashboard v2 — GM 决策级 ──────────────────────────
 
 class CategoryBreakdown(BaseModel):
     name: str                # "Paper", "AL", "PE"
-    weight_tons: float       # 异常重量（吨）
+    weight_tons: float
+    amount_cny: float        # 金额（CNY）
 
 class AgingBreakdown(BaseModel):
     aging_category: str      # "A"~"E"
     label: str               # "≤30天", ">30-90天" …
     weight_tons: float
+    amount_cny: float
 
 class PlantBreakdown(BaseModel):
     plant_group: str         # "KS" or "IDN"
-    weight_tons: float
-    amount_cny: float        # 统一换算后的人民币金额
+    total_weight_tons: float
+    abnormal_weight_tons: float
+    abnormal_rate: float     # %
+    amount_cny: float
 
 class ActionStatusBreakdown(BaseModel):
     status: str
-    weight_tons: float       # 该状态关联异常批次的重量
+    count: int
+    weight_tons: float
 
 class SupplierTop(BaseModel):
     supplier_name: str
     weight_tons: float
+    amount_cny: float
+    batch_count: int
+    is_recurring: bool = False   # 上月也出现异常
 
 class MonthlyTrend(BaseModel):
     month: str
+    total_weight_tons: float
     abnormal_weight_tons: float
-    abnormal_rate: float     # 百分比
+    abnormal_rate: float         # %
+    abnormal_amount_cny: float
+
+class NormalAgingBreakdown(BaseModel):
+    """正常物料的库龄分布。"""
+    aging_category: str
+    label: str
+    weight_tons: float
+    amount_cny: float
+    batch_count: int
+
+class NormalCategoryAging(BaseModel):
+    """正常物料 品类×库龄 热力图数据。"""
+    category: str
+    aging_category: str
+    weight_tons: float
+
+class OverdueItem(BaseModel):
+    """逾期未处理批次。"""
+    batch_no: str
+    material_name: Optional[str] = None
+    plant: Optional[str] = None
+    weight_kg: Optional[float] = None
+    amount_cny: Optional[float] = None
+    responsible_dept: Optional[str] = None
+    expected_completion: Optional[date] = None
+    overdue_days: int = 0
+
+class DeptCompletion(BaseModel):
+    """责任部门完成率。"""
+    dept: str
+    total: int
+    done: int
+    rate: float   # %
 
 class DashboardOverview(BaseModel):
-    """GET /api/dashboard/overview 的完整响应。"""
-    # Zone 1 — KPI
+    """GET /api/dashboard/overview — GM 决策级看板。"""
+    # ── Layer 1: KPI 卡片 ──
     total_weight_tons: float
     abnormal_weight_tons: float
     abnormal_rate: float                        # %
-    abnormal_rate_prev: Optional[float] = None  # 上月异常率，无则 null
-    abnormal_amount_cny: float                  # 统一 CNY（IDR / 2300）
+    abnormal_rate_prev: Optional[float] = None  # 上月异常率
+    abnormal_amount_cny: float                  # 统一 CNY
+    abnormal_amount_prev: Optional[float] = None
     action_total: int
     action_done: int
     action_closure_rate: float                  # %
-    # Zone 2 — 分布
+    claim_total_cny: float                      # 索赔总额
+    claim_recovery_rate: float                  # 回收率 %
+    overdue_count: int                          # 逾期未处理批次数
+    overdue_amount_cny: float                   # 逾期金额
+    coverage_rate: float                        # 异常批次行动覆盖率 %
+
+    # ── Layer 2: 异常物料深度拆解 ──
     by_category: list[CategoryBreakdown]
     by_aging: list[AgingBreakdown]
     by_plant: list[PlantBreakdown]
     by_action_status: list[ActionStatusBreakdown]
-    # Zone 3 — 详情
     supplier_top10: list[SupplierTop]
     monthly_trend: list[MonthlyTrend]
+
+    # ── Layer 2b: 正常物料健康度 ──
+    normal_by_aging: list[NormalAgingBreakdown]
+    normal_category_aging: list[NormalCategoryAging]
+
+    # ── Layer 3: 行动追踪 ──
+    overdue_items: list[OverdueItem]
+    dept_completion: list[DeptCompletion]
