@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 load_dotenv()
 
-from .routers import auth, actions, enums, inventory, mapping, upload, users
+from .routers import auth, actions, dashboard, enums, inventory, mapping, upload, users
 from .config import settings
 from .database import Base, engine
 from .services.bootstrap import initialize_sqlite_demo
@@ -31,6 +31,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(dashboard.router)
 app.include_router(upload.router)
 app.include_router(inventory.router)
 app.include_router(actions.router)

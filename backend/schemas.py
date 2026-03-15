@@ -204,3 +204,53 @@ class StatsResponse(BaseModel):
     done: int = 0
     done_weight: float = 0.0
     completion_rate: float = 0.0   # done / defective * 100, 0 if no defectives
+
+
+# ── Dashboard ──────────────────────────────────────────
+
+class CategoryBreakdown(BaseModel):
+    name: str                # "Paper", "AL", "PE"
+    weight_tons: float       # 异常重量（吨）
+
+class AgingBreakdown(BaseModel):
+    aging_category: str      # "A"~"E"
+    label: str               # "≤30天", ">30-90天" …
+    weight_tons: float
+
+class PlantBreakdown(BaseModel):
+    plant_group: str         # "KS" or "IDN"
+    weight_tons: float
+    amount_cny: float        # 统一换算后的人民币金额
+
+class ActionStatusBreakdown(BaseModel):
+    status: str
+    weight_tons: float       # 该状态关联异常批次的重量
+
+class SupplierTop(BaseModel):
+    supplier_name: str
+    weight_tons: float
+
+class MonthlyTrend(BaseModel):
+    month: str
+    abnormal_weight_tons: float
+    abnormal_rate: float     # 百分比
+
+class DashboardOverview(BaseModel):
+    """GET /api/dashboard/overview 的完整响应。"""
+    # Zone 1 — KPI
+    total_weight_tons: float
+    abnormal_weight_tons: float
+    abnormal_rate: float                        # %
+    abnormal_rate_prev: Optional[float] = None  # 上月异常率，无则 null
+    abnormal_amount_cny: float                  # 统一 CNY（IDR / 2300）
+    action_total: int
+    action_done: int
+    action_closure_rate: float                  # %
+    # Zone 2 — 分布
+    by_category: list[CategoryBreakdown]
+    by_aging: list[AgingBreakdown]
+    by_plant: list[PlantBreakdown]
+    by_action_status: list[ActionStatusBreakdown]
+    # Zone 3 — 详情
+    supplier_top10: list[SupplierTop]
+    monthly_trend: list[MonthlyTrend]

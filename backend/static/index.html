@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RM 库存分析与处理平台</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -120,6 +121,27 @@
         .login-bg {
             background: linear-gradient(145deg, #0f172a, #1e293b, #0f172a);
         }
+
+        /* Dashboard */
+        .kpi-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 20px 24px;
+            transition: box-shadow 0.2s;
+        }
+        .kpi-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .kpi-value { font-size: 2rem; font-weight: 800; line-height: 1.1; }
+        .kpi-trend-up   { color: #dc2626; }
+        .kpi-trend-down { color: #059669; }
+        .chart-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 20px;
+        }
+        .chart-box    { width: 100%; height: 300px; }
+        .chart-box-lg { width: 100%; height: 360px; }
     </style>
 </head>
 <body>
@@ -169,7 +191,8 @@
                     <span class="font-bold text-slate-800 text-sm">RM Inventory</span>
                 </div>
                 <nav class="flex gap-1">
-                    <button id="nav-inventory" class="px-4 py-1.5 rounded-lg text-sm font-semibold bg-indigo-50 text-indigo-600">库存明细</button>
+                    <button id="nav-dashboard" class="px-4 py-1.5 rounded-lg text-sm font-semibold bg-indigo-50 text-indigo-600">Dashboard</button>
+                    <button id="nav-inventory" class="px-4 py-1.5 rounded-lg text-sm font-medium text-slate-500 hover:bg-slate-50">库存明细</button>
                     <button id="nav-admin" class="px-4 py-1.5 rounded-lg text-sm font-medium text-slate-500 hover:bg-slate-50 hidden">管理员工具</button>
                 </nav>
             </div>
@@ -182,8 +205,76 @@
             </div>
         </header>
 
+        <!-- ─── PAGE: DASHBOARD ─── -->
+        <div id="page-dashboard" class="flex-1 p-6 max-w-[1800px] mx-auto w-full space-y-6">
+            <!-- Header + Month -->
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg font-bold text-slate-800">Dashboard Overview</h2>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold text-slate-500">月份</span>
+                    <select id="dash-month" class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-indigo-500"></select>
+                </div>
+            </div>
+            <!-- Zone 1: KPI Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="kpi-card">
+                    <p class="text-xs text-slate-400 font-medium mb-1">异常率 Abnormal Rate</p>
+                    <div class="flex items-end gap-2">
+                        <span id="kpi-rate" class="kpi-value text-red-600">—</span>
+                        <span id="kpi-trend" class="text-sm font-bold mb-1"></span>
+                    </div>
+                    <p id="kpi-rate-sub" class="text-[11px] text-slate-400 mt-1"></p>
+                </div>
+                <div class="kpi-card">
+                    <p class="text-xs text-slate-400 font-medium mb-1">异常金额 Abnormal Amount</p>
+                    <div class="flex items-end gap-2">
+                        <span id="kpi-amount" class="kpi-value text-slate-800">—</span>
+                        <span class="text-xs font-bold text-slate-400 mb-1">万元 (CNY)</span>
+                    </div>
+                    <p id="kpi-amount-sub" class="text-[11px] text-slate-400 mt-1"></p>
+                </div>
+                <div class="kpi-card">
+                    <p class="text-xs text-slate-400 font-medium mb-1">处理关闭率 Closure Rate</p>
+                    <div class="flex items-end gap-2">
+                        <span id="kpi-closure" class="kpi-value text-indigo-600">—</span>
+                    </div>
+                    <p id="kpi-closure-sub" class="text-[11px] text-slate-400 mt-1"></p>
+                </div>
+            </div>
+            <!-- Zone 2: Distribution (2x2) -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div class="chart-card">
+                    <h3 class="text-sm font-bold text-slate-700 mb-2">按 RM 类型 By Category</h3>
+                    <div id="ch-category" class="chart-box"></div>
+                </div>
+                <div class="chart-card">
+                    <h3 class="text-sm font-bold text-slate-700 mb-2">按库龄 By Aging</h3>
+                    <div id="ch-aging" class="chart-box"></div>
+                </div>
+                <div class="chart-card">
+                    <h3 class="text-sm font-bold text-slate-700 mb-2">按工厂 By Plant</h3>
+                    <div id="ch-plant" class="chart-box"></div>
+                </div>
+                <div class="chart-card">
+                    <h3 class="text-sm font-bold text-slate-700 mb-2">处理状态 Action Status</h3>
+                    <div id="ch-status" class="chart-box"></div>
+                </div>
+            </div>
+            <!-- Zone 3: Details (1x2) -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div class="chart-card">
+                    <h3 class="text-sm font-bold text-slate-700 mb-2">供应商 Top 10 Supplier</h3>
+                    <div id="ch-supplier" class="chart-box-lg"></div>
+                </div>
+                <div class="chart-card">
+                    <h3 class="text-sm font-bold text-slate-700 mb-2">月度趋势 Monthly Trend</h3>
+                    <div id="ch-trend" class="chart-box-lg"></div>
+                </div>
+            </div>
+        </div>
+
         <!-- ─── PAGE: INVENTORY ─── -->
-        <div id="page-inventory" class="flex-1 p-6 max-w-[1800px] mx-auto w-full space-y-6">
+        <div id="page-inventory" class="hidden flex-1 p-6 max-w-[1800px] mx-auto w-full space-y-6">
             <!-- Stats Cards -->
             <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <div class="bg-white p-4 rounded-2xl border border-slate-100 flex items-center gap-4">
@@ -587,6 +678,7 @@ const state = {
     page:    1,
     pageSize: 50,
     total:   0,
+    dashCharts: {},   // ECharts instances
 };
 
 const $ = (id) => document.getElementById(id);
@@ -625,24 +717,26 @@ function qualityTag(v) {
 }
 
 function showPage(page) {
-    const isInventory = page === "inventory";
-    $("page-inventory").classList.toggle("hidden", !isInventory);
-    $("page-admin").classList.toggle("hidden", isInventory);
+    const pages = ["dashboard", "inventory", "admin"];
+    pages.forEach(p => {
+        const el = $("page-" + p);
+        if (el) el.classList.toggle("hidden", p !== page);
+    });
 
     const ACTIVE = "px-4 py-1.5 rounded-lg text-sm font-semibold bg-indigo-50 text-indigo-600";
     const IDLE   = "px-4 py-1.5 rounded-lg text-sm font-medium text-slate-500 hover:bg-slate-50";
 
-    $("nav-inventory").className = isInventory ? ACTIVE : IDLE;
-    // nav-admin visibility is controlled only by role check at login.
-    // Here we only change the active/idle styling without touching hidden.
+    $("nav-dashboard").className  = (page === "dashboard")  ? ACTIVE : IDLE;
+    $("nav-inventory").className  = (page === "inventory")  ? ACTIVE : IDLE;
+
     const adminEl = $("nav-admin");
     const wasHidden = adminEl.classList.contains("hidden");
-    adminEl.className = (!isInventory ? ACTIVE : IDLE);
+    adminEl.className = (page === "admin") ? ACTIVE : IDLE;
     if (wasHidden) adminEl.classList.add("hidden");
 
-    if (!isInventory && typeof loadUsers === "function") {
-        loadUsers();
-    }
+    if (page === "dashboard") loadDashboard();
+    if (page === "inventory") { state.page = 1; loadInventory(); }
+    if (page === "admin" && typeof loadUsers === "function") loadUsers();
 }
 
 function statusTag(v) {
@@ -706,6 +800,7 @@ async function loadMonths() {
     state.months = await authFetch("/api/inventory/months");
     const opts = state.months.map(m => `<option value="${m}">${m}</option>`).join("");
     $("month-select").innerHTML = opts;
+    $("dash-month").innerHTML = opts;
     $("diag-month").innerHTML = opts;
     if (state.months.length) {
         $("upload-month").value = state.months[0];
@@ -994,6 +1089,140 @@ function logout() {
     $("login-view").classList.remove("hidden");
 }
 
+// ══════════════════════════════════════════════════════
+//  DASHBOARD
+// ══════════════════════════════════════════════════════
+async function loadDashboard() {
+    const month = $("dash-month").value;
+    if (!month) return;
+    try {
+        const d = await authFetch(`/api/dashboard/overview?month=${month}`);
+        renderDashKPIs(d);
+        renderDashCharts(d);
+    } catch (err) { console.error("Dashboard load failed:", err); }
+}
+
+function renderDashKPIs(d) {
+    // Abnormal rate
+    $("kpi-rate").textContent = d.abnormal_rate + "%";
+    $("kpi-rate-sub").textContent = `${d.abnormal_weight_tons.toLocaleString()} t 异常 / ${d.total_weight_tons.toLocaleString()} t 总重量`;
+    const tr = $("kpi-trend");
+    if (d.abnormal_rate_prev != null) {
+        const diff = d.abnormal_rate - d.abnormal_rate_prev;
+        tr.className = `text-sm font-bold mb-1 ${diff > 0 ? "kpi-trend-up" : diff < 0 ? "kpi-trend-down" : "text-slate-400"}`;
+        tr.textContent = `${diff > 0 ? "+" : ""}${diff.toFixed(1)}% vs 上月`;
+    } else { tr.textContent = ""; }
+
+    // Amount (万元)
+    const wan = d.abnormal_amount_cny / 10000;
+    $("kpi-amount").textContent = wan >= 1 ? wan.toFixed(1) : wan.toFixed(2);
+    $("kpi-amount-sub").textContent = `¥${d.abnormal_amount_cny.toLocaleString(undefined, {maximumFractionDigits:0})} (IDR 按 1:2300 折算)`;
+
+    // Closure rate
+    $("kpi-closure").textContent = d.action_closure_rate + "%";
+    $("kpi-closure-sub").textContent = `${d.action_done} 已关闭 / ${d.action_total} 行动项`;
+}
+
+function _ch(id) {
+    if (state.dashCharts[id]) state.dashCharts[id].dispose();
+    const c = echarts.init($(id));
+    state.dashCharts[id] = c;
+    return c;
+}
+
+function renderDashCharts(d) {
+    // ── Category (donut) ──
+    const c1 = _ch("ch-category");
+    c1.setOption({
+        tooltip: { trigger: "item", formatter: "{b}: {c} t ({d}%)" },
+        legend: { bottom: 0, textStyle: { fontSize: 11 } },
+        color: ["#6366f1","#f59e0b","#10b981","#ef4444","#8b5cf6"],
+        series: [{ type: "pie", radius: ["40%","70%"], center: ["50%","45%"],
+            label: { show: true, formatter: "{b}\n{c} t", fontSize: 11 },
+            data: d.by_category.map(i => ({ name: i.name, value: i.weight_tons })),
+        }],
+    });
+
+    // ── Aging (horizontal bar) ──
+    const c2 = _ch("ch-aging");
+    const ageSorted = [...d.by_aging].sort((a,b) => a.aging_category.localeCompare(b.aging_category));
+    c2.setOption({
+        tooltip: { trigger: "axis", formatter: p => `${p[0].name}: ${p[0].value} t` },
+        grid: { left: 100, right: 40, top: 10, bottom: 30 },
+        xAxis: { type: "value", axisLabel: { formatter: v => v + " t" } },
+        yAxis: { type: "category", data: ageSorted.map(i => i.label), inverse: true, axisLabel: { fontSize: 11 } },
+        series: [{ type: "bar", data: ageSorted.map((i,idx) => ({
+            value: i.weight_tons,
+            itemStyle: { color: ["#10b981","#3b82f6","#f59e0b","#f97316","#ef4444"][idx] || "#6366f1", borderRadius: [0,4,4,0] }
+        })), barWidth: 22, label: { show: true, position: "right", fontSize: 11, formatter: "{c} t" } }],
+    });
+
+    // ── Plant (donut) ──
+    const c3 = _ch("ch-plant");
+    c3.setOption({
+        tooltip: { trigger: "item", formatter: p => {
+            const it = d.by_plant[p.dataIndex];
+            return `${p.name}: ${p.value} t (${p.percent}%)<br/>金额: ¥${(it.amount_cny/10000).toFixed(1)} 万`;
+        }},
+        legend: { bottom: 0, textStyle: { fontSize: 11 } },
+        color: ["#6366f1","#f59e0b"],
+        series: [{ type: "pie", radius: ["40%","70%"], center: ["50%","45%"],
+            label: { show: true, formatter: "{b}\n{c} t", fontSize: 12, fontWeight: "bold" },
+            data: d.by_plant.map(i => ({ name: i.plant_group, value: i.weight_tons })),
+        }],
+    });
+
+    // ── Action Status (horizontal bar) ──
+    const c4 = _ch("ch-status");
+    const SC = {"待处理":"#94a3b8","讨论中":"#3b82f6","进行中":"#f59e0b","待定":"#8b5cf6","已完成":"#10b981","已关闭":"#6b7280"};
+    c4.setOption({
+        tooltip: { trigger: "axis", formatter: p => `${p[0].name}: ${p[0].value} t` },
+        grid: { left: 80, right: 40, top: 10, bottom: 30 },
+        xAxis: { type: "value", axisLabel: { formatter: v => v + " t" } },
+        yAxis: { type: "category", data: d.by_action_status.map(i => i.status), axisLabel: { fontSize: 11 } },
+        series: [{ type: "bar", data: d.by_action_status.map(i => ({
+            value: i.weight_tons, itemStyle: { color: SC[i.status] || "#94a3b8", borderRadius: [0,4,4,0] }
+        })), barWidth: 22, label: { show: true, position: "right", fontSize: 11, formatter: "{c} t" } }],
+    });
+
+    // ── Supplier Top 10 (horizontal bar) ──
+    const c5 = _ch("ch-supplier");
+    const supRev = [...d.supplier_top10].reverse();
+    c5.setOption({
+        tooltip: { trigger: "axis" },
+        grid: { left: 160, right: 50, top: 10, bottom: 30 },
+        xAxis: { type: "value", axisLabel: { formatter: v => v + " t" } },
+        yAxis: { type: "category", data: supRev.map(i => i.supplier_name.length > 14 ? i.supplier_name.slice(0,14)+"…" : i.supplier_name), axisLabel: { fontSize: 10 } },
+        color: ["#6366f1"],
+        series: [{ type: "bar", data: supRev.map(i => i.weight_tons), barWidth: 18,
+            label: { show: true, position: "right", fontSize: 11, formatter: "{c} t" },
+            itemStyle: { borderRadius: [0,4,4,0] },
+        }],
+    });
+
+    // ── Monthly Trend (bar + line dual axis) ──
+    const c6 = _ch("ch-trend");
+    c6.setOption({
+        tooltip: { trigger: "axis" },
+        legend: { data: ["异常重量(t)","异常率%"], top: 0, textStyle: { fontSize: 11 } },
+        grid: { left: 60, right: 60, top: 35, bottom: 30 },
+        xAxis: { type: "category", data: d.monthly_trend.map(i => i.month), axisLabel: { fontSize: 11 } },
+        yAxis: [
+            { type: "value", name: "吨", nameTextStyle: { fontSize: 10 } },
+            { type: "value", name: "%", nameTextStyle: { fontSize: 10 }, max: 100 },
+        ],
+        color: ["#6366f1","#ef4444"],
+        series: [
+            { name: "异常重量(t)", type: "bar", data: d.monthly_trend.map(i => i.abnormal_weight_tons), barWidth: 30, itemStyle: { borderRadius: [4,4,0,0] } },
+            { name: "异常率%", type: "line", yAxisIndex: 1, data: d.monthly_trend.map(i => i.abnormal_rate), smooth: true, symbol: "circle", symbolSize: 8, lineStyle: { width: 2 } },
+        ],
+    });
+}
+
+window.addEventListener("resize", () => {
+    Object.values(state.dashCharts).forEach(c => { if (c && !c.isDisposed()) c.resize(); });
+});
+
 async function init() {
     if (!state.token) return;
     try {
@@ -1009,7 +1238,7 @@ async function init() {
         await Promise.all([loadMonths(), loadEnums()]);
         await loadCategoryPrimaries();
         initResizing();
-        loadInventory();
+        showPage("dashboard");
     } catch (err) {
         logout();
     }
@@ -1034,8 +1263,10 @@ $("login-form").onsubmit = async (e) => {
 };
 
 $("btn-logout").onclick = logout;
+$("nav-dashboard").onclick = () => showPage("dashboard");
 $("nav-inventory").onclick = () => showPage("inventory");
 $("nav-admin").onclick = () => showPage("admin");
+$("dash-month").onchange = () => loadDashboard();
 
 $("btn-load").onclick = () => { state.page = 1; loadInventory(); };
 $("btn-toggle-unmatched").onclick = () => {
