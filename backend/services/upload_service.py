@@ -13,6 +13,9 @@ from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
 from .. import models
+from .batch_service import normalize_batch_no
+from .material_service import normalize_material_code
+from .plant_service import derive_plant_group, normalize_plant_code
 
 
 RM_COLUMNS = {
@@ -122,7 +125,12 @@ def _to_int(value: Any) -> int | None:
 
 def _parse_rows(file: UploadFile) -> pd.DataFrame:
     raw = file.file.read()
-    df = pd.read_excel(BytesIO(raw))
+    df = pd.read_excel(
+        BytesIO(raw),
+        converters={
+            "批次编号": normalize_batch_no,
+        },
+    )
     df.columns = [str(col).strip() for col in df.columns]
 
     # Force text columns to clean strings BEFORE rename/selection.
@@ -133,13 +141,18 @@ def _parse_rows(file: UploadFile) -> pd.DataFrame:
         "良品标记", "呆滞原因", "呆滞原因描述",
         "物料编号", "批次编号", "供应商", "供应商批次",
         "库龄分类", "库龄分类描述", "物料组", "物料类型",
-        "存储地点", "存储地点描述", "单位", "货币",
+        "存储地点", "存储地点描述", "单位", "货币", "工厂",
     ]
     for col in _TEXT_COLS:
         if col in df.columns:
-            df[col] = df[col].apply(
-                lambda x: str(x).strip() if pd.notna(x) else None
-            )
+            if col == "批次编号":
+                df[col] = df[col].apply(normalize_batch_no)
+            elif col == "物料编号":
+                df[col] = df[col].apply(normalize_material_code)
+            else:
+                df[col] = df[col].apply(
+                    lambda x: str(x).strip() if pd.notna(x) else None
+                )
 
     return df
 
@@ -207,9 +220,9 @@ def _build_abnormal_info(row: pd.Series) -> tuple[bool, str]:
 def _get_material_mapping(db: Session) -> dict[str, models.MaterialMapping]:
     mapping_rows = db.query(models.MaterialMapping).all()
     return {
-        item.sku: item
+        normalize_material_code(item.sku): item
         for item in mapping_rows
-        if item.sku
+        if normalize_material_code(item.sku)
     }
 
 
@@ -236,11 +249,11 @@ def parse_and_save_sap_upload(
     # (e.g. 1.9E+12). We force them to plain string here as a safety net,
     # even though _parse_rows already handled the raw columns before rename.
     work_df["material_code"] = work_df["material_code"].apply(
-        lambda x: str(x).strip() if pd.notna(x) else None
+        normalize_material_code
     )
-    work_df["batch_no"] = work_df["batch_no"].apply(
-        lambda x: str(x).strip() if pd.notna(x) else None
-    )
+    work_df["batch_no"] = work_df["batch_no"].apply(normalize_batch_no)
+    work_df["plant"] = work_df["plant"].apply(normalize_plant_code)
+    work_df["plant_group"] = work_df["plant"].apply(derive_plant_group)
 
     mapping_map = _get_material_mapping(db)
 
@@ -253,7 +266,7 @@ def parse_and_save_sap_upload(
         is_abnormal, reasons = _build_abnormal_info(row)
         if is_abnormal:
             abnormal_count += 1
-        mapped = mapping_map.get(_normalize_value(row["material_code"]))
+        mapped = mapping_map.get(normalize_material_code(row["material_code"]))
         if mapped is not None:
             work_df.loc[row.name, "rm_family"] = mapped.family
             work_df.loc[row.name, "category_primary"] = mapped.category_primary
@@ -264,6 +277,7 @@ def parse_and_save_sap_upload(
             material_code=_normalize_value(row["material_code"]),
             material_name=_normalize_value(row["material_name"]),
             plant=_normalize_value(row["plant"]),
+            plant_group=_normalize_value(row.get("plant_group")),
             bin_location=_normalize_value(row["bin_location"]),
             storage_location=_normalize_value(row["storage_location"]),
             storage_loc_desc=_normalize_value(row["storage_loc_desc"]),

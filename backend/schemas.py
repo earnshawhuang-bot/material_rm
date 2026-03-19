@@ -41,9 +41,9 @@ class UploadResponse(BaseModel):
 
 class InventoryFilterParams(BaseModel):
     snapshot_month: str
-    plant: Optional[str] = None
-    category_primary: Optional[str] = None   # replaces rm_category for user-facing filter
-    aging_category: Optional[str] = None
+    plant: Optional[str] = None   # accepts plant_group (KS/IDN) or plant_code
+    category_primary: Optional[list[str]] = None   # replaces rm_category for user-facing filter
+    aging_category: Optional[list[str]] = None
     is_abnormal: Optional[bool] = None
     quality_flag: Optional[str] = None
     material_code: Optional[str] = None
@@ -61,6 +61,7 @@ class InventoryItem(BaseModel):
     material_code: Optional[str]
     material_name: Optional[str]
     plant: Optional[str]
+    plant_group: Optional[str]
     storage_location: Optional[str]
     storage_loc_desc: Optional[str]
     bin_location: Optional[str]
@@ -209,104 +210,66 @@ class StatsResponse(BaseModel):
 # ── Dashboard v2 — GM 决策级 ──────────────────────────
 
 class CategoryBreakdown(BaseModel):
-    name: str                # "Paper", "AL", "PE"
+    name: str
     weight_tons: float
-    amount_cny: float        # 金额（CNY）
+    amount_cny: float
+
 
 class AgingBreakdown(BaseModel):
-    aging_category: str      # "A"~"E"
-    label: str               # "≤30天", ">30-90天" …
+    aging_category: str
+    label: str
     weight_tons: float
     amount_cny: float
 
-class PlantBreakdown(BaseModel):
-    plant_group: str         # "KS" or "IDN"
-    total_weight_tons: float
-    abnormal_weight_tons: float
-    abnormal_rate: float     # %
+
+class ReasonBreakdown(BaseModel):
+    name: str
+    weight_tons: float
     amount_cny: float
 
-class ActionStatusBreakdown(BaseModel):
-    status: str
-    count: int
+
+class DeptBreakdown(BaseModel):
+    name: str
     weight_tons: float
+    amount_cny: float
+    batch_count: int
 
 class SupplierTop(BaseModel):
     supplier_name: str
     weight_tons: float
     amount_cny: float
     batch_count: int
-    is_recurring: bool = False   # 上月也出现异常
-
-class MonthlyTrend(BaseModel):
-    month: str
-    total_weight_tons: float
-    abnormal_weight_tons: float
-    abnormal_rate: float         # %
-    abnormal_amount_cny: float
+    is_recurring: bool = False
 
 class NormalAgingBreakdown(BaseModel):
-    """正常物料的库龄分布。"""
     aging_category: str
     label: str
     weight_tons: float
     amount_cny: float
     batch_count: int
 
-class NormalCategoryAging(BaseModel):
-    """正常物料 品类×库龄 热力图数据。"""
-    category: str
-    aging_category: str
-    weight_tons: float
 
-class OverdueItem(BaseModel):
-    """逾期未处理批次。"""
-    batch_no: str
-    material_name: Optional[str] = None
-    plant: Optional[str] = None
-    weight_kg: Optional[float] = None
-    amount_cny: Optional[float] = None
-    responsible_dept: Optional[str] = None
-    expected_completion: Optional[date] = None
-    overdue_days: int = 0
+class DashboardBreakdownItem(BaseModel):
+    name: str
+    weight_tons: int
+    ratio: int
+    amount_cny: float = 0.0
+    batch_count: int = 0
 
-class DeptCompletion(BaseModel):
-    """责任部门完成率。"""
-    dept: str
-    total: int
-    done: int
-    rate: float   # %
 
 class DashboardOverview(BaseModel):
-    """GET /api/dashboard/overview — GM 决策级看板。"""
-    # ── Layer 1: KPI 卡片 ──
-    total_weight_tons: float
-    abnormal_weight_tons: float
-    abnormal_rate: float                        # %
-    abnormal_rate_prev: Optional[float] = None  # 上月异常率
-    abnormal_amount_cny: float                  # 统一 CNY
-    abnormal_amount_prev: Optional[float] = None
-    action_total: int
-    action_done: int
-    action_closure_rate: float                  # %
-    claim_total_cny: float                      # 索赔总额
-    claim_recovery_rate: float                  # 回收率 %
-    overdue_count: int                          # 逾期未处理批次数
-    overdue_amount_cny: float                   # 逾期金额
-    coverage_rate: float                        # 异常批次行动覆盖率 %
-
-    # ── Layer 2: 异常物料深度拆解 ──
-    by_category: list[CategoryBreakdown]
-    by_aging: list[AgingBreakdown]
-    by_plant: list[PlantBreakdown]
-    by_action_status: list[ActionStatusBreakdown]
-    supplier_top10: list[SupplierTop]
-    monthly_trend: list[MonthlyTrend]
-
-    # ── Layer 2b: 正常物料健康度 ──
-    normal_by_aging: list[NormalAgingBreakdown]
-    normal_category_aging: list[NormalCategoryAging]
-
-    # ── Layer 3: 行动追踪 ──
-    overdue_items: list[OverdueItem]
-    dept_completion: list[DeptCompletion]
+    """GET /api/dashboard/overview — GM 首页口径。"""
+    total_weight_tons: int
+    total_amount_cny: float
+    normal_weight_tons: int
+    normal_amount_cny: float
+    abnormal_weight_tons: int
+    abnormal_amount_cny: float
+    abnormal_rate: int
+    over_180_weight_tons: int
+    over_180_amount_cny: float
+    over_180_rate: int
+    reason_breakdown: list[DashboardBreakdownItem]
+    category_breakdown: list[DashboardBreakdownItem]
+    dept_breakdown: list[DashboardBreakdownItem]
+    supplier_breakdown: list[DashboardBreakdownItem]

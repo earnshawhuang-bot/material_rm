@@ -8,6 +8,49 @@ from sqlalchemy import and_, desc, asc
 from sqlalchemy.orm import Session, aliased
 
 from .. import models, schemas
+from .batch_service import normalize_batch_no
+from .material_service import normalize_material_code
+from .plant_service import build_plant_group_expr, normalize_plant_filter
+
+
+def resolve_material_codes_for_categories(
+    db: Session,
+    snapshot_month: str,
+    categories: list[str],
+) -> set[str]:
+    """Resolve raw snapshot material_code set by mapping-based category matching."""
+    wanted = {
+        str(c).strip()
+        for c in (categories or [])
+        if str(c).strip()
+    }
+    if not wanted:
+        return set()
+
+    mapping_rows = (
+        db.query(models.MaterialMapping.sku, models.MaterialMapping.category_primary)
+        .filter(models.MaterialMapping.category_primary.in_(wanted))
+        .all()
+    )
+    mapped_keys = {
+        normalize_material_code(row.sku)
+        for row in mapping_rows
+        if normalize_material_code(row.sku)
+    }
+    if not mapped_keys:
+        return set()
+
+    snapshot_codes = (
+        db.query(models.InventorySnapshot.material_code)
+        .filter(models.InventorySnapshot.snapshot_month == snapshot_month)
+        .distinct()
+        .all()
+    )
+    return {
+        raw_code
+        for (raw_code,) in snapshot_codes
+        if raw_code and normalize_material_code(raw_code) in mapped_keys
+    }
 
 
 def list_inventory(
@@ -15,6 +58,10 @@ def list_inventory(
     params: schemas.InventoryFilterParams,
 ) -> Tuple[list[schemas.InventoryItem], int]:
     """Query inventory list with join to batch action table."""
+    plant_group_expr = build_plant_group_expr(
+        models.InventorySnapshot.plant,
+        models.InventorySnapshot.plant_group,
+    )
     action_alias = aliased(models.BatchAction)
     query = (
         db.query(models.InventorySnapshot, action_alias)
@@ -29,11 +76,22 @@ def list_inventory(
     )
 
     if params.plant:
-        query = query.filter(models.InventorySnapshot.plant == params.plant)
+        plant_filter = normalize_plant_filter(params.plant)
+        if plant_filter in {"KS", "IDN"}:
+            query = query.filter(plant_group_expr == plant_filter)
+        else:
+            query = query.filter(models.InventorySnapshot.plant == plant_filter)
     if params.category_primary:
-        query = query.filter(models.InventorySnapshot.category_primary == params.category_primary)
+        matched_codes = resolve_material_codes_for_categories(
+            db=db,
+            snapshot_month=params.snapshot_month,
+            categories=params.category_primary,
+        )
+        if not matched_codes:
+            return [], 0
+        query = query.filter(models.InventorySnapshot.material_code.in_(matched_codes))
     if params.aging_category:
-        query = query.filter(models.InventorySnapshot.aging_category == params.aging_category)
+        query = query.filter(models.InventorySnapshot.aging_category.in_(params.aging_category))
     if params.is_abnormal is not None:
         query = query.filter(models.InventorySnapshot.is_abnormal == params.is_abnormal)
     if params.quality_flag:
@@ -64,14 +122,30 @@ def list_inventory(
     offset = (params.page - 1) * params.page_size
     rows = query.offset(offset).limit(params.page_size).all()
 
+    fallback_actions: dict[str, models.BatchAction] = {}
+    if any(action is None for _, action in rows):
+        action_rows = (
+            db.query(models.BatchAction)
+            .filter(models.BatchAction.snapshot_month == params.snapshot_month)
+            .order_by(models.BatchAction.updated_at.desc(), models.BatchAction.id.desc())
+            .all()
+        )
+        for act in action_rows:
+            key = normalize_batch_no(act.batch_no)
+            if key and key not in fallback_actions:
+                fallback_actions[key] = act
+
     items: list[schemas.InventoryItem] = []
     for snapshot, action in rows:
+        if action is None:
+            action = fallback_actions.get(normalize_batch_no(snapshot.batch_no))
         item = schemas.InventoryItem(
             snapshot_month=snapshot.snapshot_month,
             batch_no=snapshot.batch_no,
             material_code=snapshot.material_code,
             material_name=snapshot.material_name,
             plant=snapshot.plant,
+            plant_group=snapshot.plant_group,
             storage_location=snapshot.storage_location,
             storage_loc_desc=snapshot.storage_loc_desc,
             bin_location=snapshot.bin_location,

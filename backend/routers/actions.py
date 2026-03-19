@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 
@@ -22,11 +22,14 @@ def save_action(
     db: Session = Depends(get_db),
 ):
     """Create or update action record by snapshot_month + batch_no."""
-    action = action_service.save_or_update_action(
-        db=db,
-        payload=payload,
-        updated_by=current_user.username,
-    )
+    try:
+        action = action_service.save_or_update_action(
+            db=db,
+            payload=payload,
+            updated_by=current_user.username,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return {"id": action.id, "message": "保存成功"}
 
 

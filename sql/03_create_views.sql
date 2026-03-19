@@ -18,6 +18,7 @@ SELECT
     s.material_code,
     s.material_name,
     s.plant,
+    s.plant_group,
     s.storage_location,
     s.storage_loc_desc,
     s.bin_location,

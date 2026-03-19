@@ -5,13 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from io import BytesIO
 from typing import Any
-import re
 
 import pandas as pd
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
 from .. import models
+from .material_service import normalize_material_code
 
 
 MAPPING_REQUIRED_COLUMNS = {
@@ -52,16 +52,8 @@ def _normalize_str(value: Any) -> str | None:
 
 
 def _normalize_sku(value: Any) -> str | None:
-    """Read SKU as text and strip Excel float artefacts like '.0'."""
-    text = _normalize_str(value)
-    if not text:
-        return None
-
-    # Excel numeric cells often become '1101000140.0' after import.
-    # For SKU we need a pure text key without the trailing decimal part.
-    if re.fullmatch(r"\d+\.0+", text):
-        return text.split(".", 1)[0]
-    return text
+    """Compatibility wrapper for SKU normalization."""
+    return normalize_material_code(value)
 
 
 def _to_normalized_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -147,15 +139,15 @@ def backfill_snapshot_mapping(db: Session) -> int:
     """
     mapping_rows = db.query(models.MaterialMapping).all()
     mapping_map = {
-        item.sku: item
+        normalize_material_code(item.sku): item
         for item in mapping_rows
-        if item.sku
+        if normalize_material_code(item.sku)
     }
 
     snapshots = db.query(models.InventorySnapshot).all()
     updated = 0
     for snapshot in snapshots:
-        mapped = mapping_map.get(snapshot.material_code)
+        mapped = mapping_map.get(normalize_material_code(snapshot.material_code))
         new_family = mapped.family if mapped else None
         new_primary = mapped.category_primary if mapped else None
         if snapshot.rm_family != new_family or snapshot.category_primary != new_primary:

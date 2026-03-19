@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 from ..auth import get_password_hash
 from ..config import settings
-from ..database import SessionLocal
+from ..database import SessionLocal, engine
 from .. import models
+from .plant_service import derive_plant_group, normalize_plant_code
 
 
 # 责任部门和处理方案已改为自由文本输入，不再使用枚举。
@@ -79,6 +81,7 @@ def _seed_inventory(db: Session) -> None:
                 material_code="RM-BASE-001",
                 material_name="EVA纸板A",
                 plant="3000",
+                plant_group=derive_plant_group("3000"),
                 storage_location="A01",
                 storage_loc_desc="原料仓",
                 bin_location="B1",
@@ -109,6 +112,7 @@ def _seed_inventory(db: Session) -> None:
                 material_code="RM-AL-001",
                 material_name="AL箔卷B",
                 plant="3001",
+                plant_group=derive_plant_group("3001"),
                 storage_location="A02",
                 storage_loc_desc="辅料仓",
                 bin_location="B2",
@@ -149,13 +153,46 @@ def _seed_inventory(db: Session) -> None:
     )
 
 
+def ensure_runtime_schema() -> None:
+    """Apply small runtime-safe schema fixes needed for local development."""
+    inspector = inspect(engine)
+    if "rm_inventory_snapshot" not in inspector.get_table_names():
+        return
+
+    existing_columns = {col["name"] for col in inspector.get_columns("rm_inventory_snapshot")}
+    if "plant_group" not in existing_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE rm_inventory_snapshot ADD COLUMN plant_group VARCHAR(10)"))
+
+
+def backfill_snapshot_plant_fields(db: Session) -> None:
+    """Normalize historical plant values and derive plant_group."""
+    rows = db.query(models.InventorySnapshot).all()
+    dirty = False
+    for row in rows:
+        try:
+            normalized = normalize_plant_code(row.plant)
+        except ValueError:
+            normalized = row.plant.strip() if isinstance(row.plant, str) and row.plant.strip() else None
+        derived_group = derive_plant_group(normalized)
+        if row.plant != normalized or row.plant_group != derived_group:
+            row.plant = normalized
+            row.plant_group = derived_group
+            dirty = True
+    if dirty:
+        db.flush()
+
+
 def initialize_sqlite_demo() -> None:
     """Create default admin + enum data for local demo."""
-    if settings.database_dialect != "sqlite" or not settings.seed_sqlite_demo:
-        return
+    ensure_runtime_schema()
 
     db = SessionLocal()
     try:
+        backfill_snapshot_plant_fields(db)
+        if settings.database_dialect != "sqlite" or not settings.seed_sqlite_demo:
+            db.commit()
+            return
         _seed_admin(db)
         _seed_enums(db)
         _seed_inventory(db)

@@ -27,6 +27,7 @@ BEGIN
         material_code       VARCHAR(20),                   -- 物料编号
         material_name       NVARCHAR(200),                 -- 物料名称
         plant               VARCHAR(10),                   -- 工厂
+        plant_group         VARCHAR(10),                   -- 工厂分组：KS / IDN
         bin_location        VARCHAR(20),                   -- BIN位
         storage_location    VARCHAR(10),                   -- 存储地点代码
         storage_loc_desc    NVARCHAR(100),                 -- 存储地点描述
@@ -74,6 +75,7 @@ BEGIN
 
     CREATE INDEX idx_snapshot_month ON dbo.rm_inventory_snapshot(snapshot_month);
     CREATE INDEX idx_snapshot_plant ON dbo.rm_inventory_snapshot(plant);
+    CREATE INDEX idx_snapshot_plant_group ON dbo.rm_inventory_snapshot(plant_group);
     CREATE INDEX idx_snapshot_aging ON dbo.rm_inventory_snapshot(aging_category);
     CREATE INDEX idx_snapshot_abnormal ON dbo.rm_inventory_snapshot(is_abnormal);
     CREATE INDEX idx_snapshot_material ON dbo.rm_inventory_snapshot(material_code);

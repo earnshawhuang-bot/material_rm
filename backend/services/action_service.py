@@ -8,28 +8,62 @@ from typing import Any
 
 import pandas as pd
 from fastapi import UploadFile
+from openpyxl import load_workbook
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
+from .batch_service import normalize_batch_no
+
+
+def _find_action_by_normalized_batch(
+    db: Session,
+    snapshot_month: str,
+    normalized_batch_no: str,
+) -> models.BatchAction | None:
+    """Find one action row by month + normalized batch key."""
+    exact = (
+        db.query(models.BatchAction)
+        .filter(
+            models.BatchAction.snapshot_month == snapshot_month,
+            models.BatchAction.batch_no == normalized_batch_no,
+        )
+        .first()
+    )
+    if exact is not None:
+        return exact
+
+    rows = (
+        db.query(models.BatchAction)
+        .filter(models.BatchAction.snapshot_month == snapshot_month)
+        .order_by(models.BatchAction.updated_at.desc(), models.BatchAction.id.desc())
+        .all()
+    )
+    for row in rows:
+        if normalize_batch_no(row.batch_no) == normalized_batch_no:
+            return row
+    return None
 
 
 def save_or_update_action(db, payload: schemas.ActionSaveRequest, updated_by: str) -> models.BatchAction:
     """Create or update one batch action record."""
-    action = (
-        db.query(models.BatchAction)
-        .filter(
-            models.BatchAction.snapshot_month == payload.snapshot_month,
-            models.BatchAction.batch_no == payload.batch_no,
-        )
-        .first()
+    batch_no = normalize_batch_no(payload.batch_no)
+    if not batch_no:
+        raise ValueError("批次编号不能为空")
+
+    action = _find_action_by_normalized_batch(
+        db=db,
+        snapshot_month=payload.snapshot_month,
+        normalized_batch_no=batch_no,
     )
 
     if action is None:
         action = models.BatchAction(
             snapshot_month=payload.snapshot_month,
-            batch_no=payload.batch_no,
+            batch_no=batch_no,
         )
         db.add(action)
+    elif action.batch_no != batch_no:
+        action.batch_no = batch_no
 
     action.reason_note = payload.reason_note
     action.responsible_dept = payload.responsible_dept
@@ -80,18 +114,20 @@ def carry_forward_actions(db: Session, new_month: str) -> dict:
 
     # 获取新月份快照中所有 batch_no
     new_batches = set(
-        row[0]
+        normalize_batch_no(row[0])
         for row in db.query(models.InventorySnapshot.batch_no)
         .filter(models.InventorySnapshot.snapshot_month == new_month)
         .all()
+        if normalize_batch_no(row[0])
     )
 
     # 获取新月份已有的行动项 batch_no
     existing_actions = set(
-        row[0]
+        normalize_batch_no(row[0])
         for row in db.query(models.BatchAction.batch_no)
         .filter(models.BatchAction.snapshot_month == new_month)
         .all()
+        if normalize_batch_no(row[0])
     )
 
     stats = {"carried": 0, "skipped_closed": 0, "skipped_existing": 0, "skipped_no_snapshot": 0}
@@ -100,17 +136,18 @@ def carry_forward_actions(db: Session, new_month: str) -> dict:
         if act.action_status == "已关闭":
             stats["skipped_closed"] += 1
             continue
-        if act.batch_no not in new_batches:
+        normalized_batch = normalize_batch_no(act.batch_no)
+        if normalized_batch not in new_batches:
             stats["skipped_no_snapshot"] += 1
             continue
-        if act.batch_no in existing_actions:
+        if normalized_batch in existing_actions:
             stats["skipped_existing"] += 1
             continue
 
         db.add(
             models.BatchAction(
                 snapshot_month=new_month,
-                batch_no=act.batch_no,
+                batch_no=normalized_batch,
                 reason_note=act.reason_note,
                 responsible_dept=act.responsible_dept,
                 action_plan=act.action_plan,
@@ -229,6 +266,61 @@ def _safe_str(val: Any) -> str | None:
     return s
 
 
+def _merge_action_fill_blanks(target: models.BatchAction, source: models.BatchAction) -> None:
+    """Merge source into target using fill-empty-only strategy."""
+    if not target.reason_note and source.reason_note:
+        target.reason_note = source.reason_note
+    if not target.responsible_dept and source.responsible_dept:
+        target.responsible_dept = source.responsible_dept
+    if not target.action_plan and source.action_plan:
+        target.action_plan = source.action_plan
+    if (not target.action_status or target.action_status == "待处理") and source.action_status:
+        target.action_status = source.action_status
+    if not target.remark and source.remark:
+        target.remark = source.remark
+    if target.claim_amount is None and source.claim_amount is not None:
+        target.claim_amount = source.claim_amount
+    if not target.claim_currency and source.claim_currency:
+        target.claim_currency = source.claim_currency
+    if target.expected_completion is None and source.expected_completion is not None:
+        target.expected_completion = source.expected_completion
+
+
+def _read_action_excel_rows(raw: bytes) -> list[dict[str, Any]]:
+    """Read action import rows with openpyxl to preserve text cell values."""
+    workbook = load_workbook(filename=BytesIO(raw), read_only=True, data_only=True)
+    try:
+        sheet = workbook.active
+        row_iter = sheet.iter_rows(values_only=False)
+        header_cells = next(row_iter, None)
+        if not header_cells:
+            return []
+
+        headers: list[str] = []
+        for cell in header_cells:
+            header = _safe_str(cell.value)
+            headers.append(header or "")
+
+        rows: list[dict[str, Any]] = []
+        for cells in row_iter:
+            row_data: dict[str, Any] = {}
+            has_value = False
+            for idx, cell in enumerate(cells):
+                if idx >= len(headers):
+                    continue
+                header = headers[idx]
+                if not header:
+                    continue
+                row_data[header] = cell.value
+                if cell.value is not None:
+                    has_value = True
+            if has_value:
+                rows.append(row_data)
+        return rows
+    finally:
+        workbook.close()
+
+
 def import_actions_from_excel(
     db: Session,
     file: UploadFile,
@@ -246,8 +338,8 @@ def import_actions_from_excel(
     - 已存在的行动项：仅补空不覆盖
     """
     raw = file.file.read()
-    df = pd.read_excel(BytesIO(raw))
-    df.columns = [str(c).strip() for c in df.columns]
+    rows = _read_action_excel_rows(raw)
+    df = pd.DataFrame(rows)
 
     # 必须有 "批次编号" 列
     if "批次编号" not in df.columns:
@@ -255,29 +347,47 @@ def import_actions_from_excel(
 
     # 获取该月份所有 quality_flag='N' 的批次
     abnormal_batches = set(
-        row[0]
+        normalize_batch_no(row[0])
         for row in db.query(models.InventorySnapshot.batch_no)
         .filter(
             models.InventorySnapshot.snapshot_month == snapshot_month,
             models.InventorySnapshot.quality_flag == "N",
         )
         .all()
+        if normalize_batch_no(row[0])
     )
 
     # 获取该月份已有的行动项
-    existing_actions: dict[str, models.BatchAction] = {
-        act.batch_no: act
-        for act in db.query(models.BatchAction)
+    existing_actions: dict[str, models.BatchAction] = {}
+    existing_rows = (
+        db.query(models.BatchAction)
         .filter(models.BatchAction.snapshot_month == snapshot_month)
+        .order_by(models.BatchAction.updated_at.desc(), models.BatchAction.id.desc())
         .all()
-    }
+    )
+    grouped_actions: dict[str, list[models.BatchAction]] = {}
+    for act in existing_rows:
+        key = normalize_batch_no(act.batch_no)
+        if key:
+            grouped_actions.setdefault(key, []).append(act)
+
+    for key, acts in grouped_actions.items():
+        primary = next((a for a in acts if a.batch_no == key), acts[0])
+        for duplicate in acts:
+            if duplicate is primary:
+                continue
+            _merge_action_fill_blanks(primary, duplicate)
+            db.delete(duplicate)
+        if primary.batch_no != key:
+            primary.batch_no = key
+        existing_actions[key] = primary
 
     stats = schemas.ActionImportResponse(matched=0, skipped=0, errors=0, error_details=[])
 
     for idx, row in df.iterrows():
         row_num = idx + 2  # Excel 行号（标题行是第1行）
         try:
-            batch_no = _safe_str(row.get("批次编号"))
+            batch_no = normalize_batch_no(row.get("批次编号"))
             if not batch_no:
                 continue  # 无批次号的行直接跳过
 

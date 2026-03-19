@@ -6,13 +6,16 @@ import io
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import and_, case, func
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy import and_, func
+from sqlalchemy.orm import Session
 
 from .. import schemas
 from ..auth import get_current_user
 from ..database import get_db
 from ..services import inventory_service
+from ..services.batch_service import normalize_batch_no
+from ..services.material_service import normalize_material_code
+from ..services.plant_service import build_plant_group_expr, normalize_plant_filter
 from .. import models
 
 router = APIRouter(prefix="/api/inventory", tags=["inventory"])
@@ -47,8 +50,8 @@ def _get_unmatched_material_groups(db: Session, snapshot_month: str):
 def list_inventory(
     snapshot_month: str = Query(..., description="快照月 YYYY-MM"),
     plant: str | None = None,
-    category_primary: str | None = None,
-    aging_category: str | None = None,
+    category_primary: list[str] | None = Query(None),
+    aging_category: list[str] | None = Query(None),
     is_abnormal: bool | None = None,
     quality_flag: str | None = None,
     material_code: str | None = None,
@@ -96,8 +99,8 @@ def get_months(db: Session = Depends(get_db), _: object = Depends(get_current_us
 def get_stats(
     snapshot_month: str = Query(..., description="快照月 YYYY-MM"),
     plant: str | None = None,
-    category_primary: str | None = None,
-    aging_category: str | None = None,
+    category_primary: list[str] | None = Query(None),
+    aging_category: list[str] | None = Query(None),
     is_abnormal: bool | None = None,
     keyword: str | None = None,
     db: Session = Depends(get_db),
@@ -106,13 +109,25 @@ def get_stats(
     """Return aggregated stats for the current filter context (full dataset, no pagination)."""
 
     snap = models.InventorySnapshot
+    plant_group_expr = build_plant_group_expr(snap.plant, snap.plant_group)
     base = db.query(snap).filter(snap.snapshot_month == snapshot_month)
     if plant:
-        base = base.filter(snap.plant == plant)
+        plant_filter = normalize_plant_filter(plant)
+        if plant_filter in {"KS", "IDN"}:
+            base = base.filter(plant_group_expr == plant_filter)
+        else:
+            base = base.filter(snap.plant == plant_filter)
     if category_primary:
-        base = base.filter(snap.category_primary == category_primary)
+        matched_codes = inventory_service.resolve_material_codes_for_categories(
+            db=db,
+            snapshot_month=snapshot_month,
+            categories=category_primary,
+        )
+        if not matched_codes:
+            return schemas.StatsResponse()
+        base = base.filter(snap.material_code.in_(matched_codes))
     if aging_category:
-        base = base.filter(snap.aging_category == aging_category)
+        base = base.filter(snap.aging_category.in_(aging_category))
     if is_abnormal is not None:
         base = base.filter(snap.is_abnormal == is_abnormal)
     if keyword:
@@ -124,44 +139,70 @@ def get_stats(
             | snap.supplier_name.like(k)
         )
 
-    act = aliased(models.BatchAction)
-    q = base.outerjoin(
-        act,
-        and_(snap.snapshot_month == act.snapshot_month, snap.batch_no == act.batch_no),
+    snapshot_rows = base.with_entities(
+        snap.batch_no,
+        snap.weight_kg,
+        snap.quality_flag,
+        snap.is_abnormal,
+    ).all()
+
+    action_rows = (
+        db.query(
+            models.BatchAction.batch_no,
+            models.BatchAction.action_status,
+            models.BatchAction.updated_at,
+            models.BatchAction.id,
+        )
+        .filter(models.BatchAction.snapshot_month == snapshot_month)
+        .order_by(models.BatchAction.updated_at.desc(), models.BatchAction.id.desc())
+        .all()
     )
+    action_map: dict[str, str | None] = {}
+    for row in action_rows:
+        key = normalize_batch_no(row.batch_no)
+        if key and key not in action_map:
+            action_map[key] = row.action_status
 
-    w          = func.coalesce(snap.weight_kg, 0.0)
-    is_def     = snap.quality_flag == "N"
-    is_pending = and_(snap.is_abnormal == True, act.action_status.is_(None))  # noqa: E712
-    is_done    = act.action_status == "已完成"
+    total = 0
+    total_weight = 0.0
+    defective = 0
+    defective_weight = 0.0
+    pending = 0
+    pending_weight = 0.0
+    done = 0
+    done_weight = 0.0
+    for row in snapshot_rows:
+        weight = float(row.weight_kg or 0.0)
+        total += 1
+        total_weight += weight
 
-    result = q.with_entities(
-        func.count(snap.id).label("total"),
-        func.sum(w).label("total_weight"),
-        func.sum(case((is_def,     1),   else_=0  )).label("defective"),
-        func.sum(case((is_def,     w),   else_=0.0)).label("defective_weight"),
-        func.sum(case((is_pending, 1),   else_=0  )).label("pending"),
-        func.sum(case((is_pending, w),   else_=0.0)).label("pending_weight"),
-        func.sum(case((is_done,    1),   else_=0  )).label("done"),
-        func.sum(case((is_done,    w),   else_=0.0)).label("done_weight"),
-    ).one()
+        if row.quality_flag == "N":
+            defective += 1
+            defective_weight += weight
+
+        status_value = action_map.get(normalize_batch_no(row.batch_no))
+        if bool(row.is_abnormal) and (status_value is None or not str(status_value).strip()):
+            pending += 1
+            pending_weight += weight
+
+        if status_value == "已完成":
+            done += 1
+            done_weight += weight
 
     def _t(kg) -> float:
         return round((kg or 0) / 1000, 1)
 
-    defective = result.defective or 0
-    done      = result.done or 0
     rate      = round(done / defective * 100, 1) if defective > 0 else 0.0
 
     return schemas.StatsResponse(
-        total=result.total or 0,
-        total_weight=_t(result.total_weight),
+        total=total,
+        total_weight=_t(total_weight),
         defective=defective,
-        defective_weight=_t(result.defective_weight),
-        pending=result.pending or 0,
-        pending_weight=_t(result.pending_weight),
+        defective_weight=_t(defective_weight),
+        pending=pending,
+        pending_weight=_t(pending_weight),
         done=done,
-        done_weight=_t(result.done_weight),
+        done_weight=_t(done_weight),
         completion_rate=rate,
     )
 
@@ -172,18 +213,31 @@ def get_category_primaries(
     db: Session = Depends(get_db),
     _: object = Depends(get_current_user),
 ):
-    """Return distinct non-null category_primary values for the given month."""
-    rows = (
-        db.query(models.InventorySnapshot.category_primary)
-        .filter(
-            models.InventorySnapshot.snapshot_month == snapshot_month,
-            models.InventorySnapshot.category_primary.isnot(None),
-        )
+    """Return category_primary values derived from mapping by material_code matching."""
+    material_rows = (
+        db.query(models.InventorySnapshot.material_code)
+        .filter(models.InventorySnapshot.snapshot_month == snapshot_month)
         .distinct()
-        .order_by(models.InventorySnapshot.category_primary)
         .all()
     )
-    return {"items": [r[0] for r in rows]}
+    material_keys = {
+        normalize_material_code(r[0])
+        for r in material_rows
+        if normalize_material_code(r[0])
+    }
+    if not material_keys:
+        return {"items": []}
+
+    mapping_rows = db.query(
+        models.MaterialMapping.sku,
+        models.MaterialMapping.category_primary,
+    ).all()
+    categories = sorted({
+        (row.category_primary or "").strip()
+        for row in mapping_rows
+        if row.category_primary and normalize_material_code(row.sku) in material_keys
+    })
+    return {"items": categories}
 
 
 @router.get("/unmatched")
@@ -310,6 +364,7 @@ def get_batch_detail(batch_no: str, snapshot_month: str, db: Session = Depends(g
             "material_code": snapshot.material_code,
             "material_name": snapshot.material_name,
             "plant": snapshot.plant,
+            "plant_group": snapshot.plant_group,
             "storage_location": snapshot.storage_location,
             "storage_loc_desc": snapshot.storage_loc_desc,
             "bin_location": snapshot.bin_location,

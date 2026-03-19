@@ -22,6 +22,7 @@ class InventorySnapshot(Base):
     material_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     material_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     plant: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
+    plant_group: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
     bin_location: Mapped[str | None] = mapped_column(String(20), nullable=True)
     storage_location: Mapped[str | None] = mapped_column(String(10), nullable=True)
     storage_loc_desc: Mapped[str | None] = mapped_column(String(100), nullable=True)
