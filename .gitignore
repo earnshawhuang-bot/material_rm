@@ -2,6 +2,7 @@
 /backend/rm_inventory_demo.db
 /.cursor/
 /.codex/
+.claude/
 __pycache__/
 *.pyc
 *.pyo
@@ -9,3 +10,9 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# runtime/test artifacts
+backend/*.log
+backend/tmp_*.log
+backend/backups/
+tmp_*
+tmp_edge_profile*/
