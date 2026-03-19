@@ -97,3 +97,11 @@ uvicorn backend.main:app --reload --host 0.0.0.0 --port 8080
   - `family` / `家族`（可选）
   - `category_primary` / `一级分类`（可选）
 - 上传成功会先清空历史映射，再按文件内容重建映射表。
+
+## 编码与乱码防护（必读）
+
+- 规范文档：`ENCODING_RULES.md`
+- 修改前后都执行编码检查：
+  - `python scripts/check_encoding.py`
+  - 或（Windows）`powershell -ExecutionPolicy Bypass -File scripts/check_encoding.ps1`
+- PowerShell 读取/写入文件时必须显式 UTF-8 编码，禁止默认编码读写。

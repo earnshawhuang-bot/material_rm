@@ -11,6 +11,7 @@ from .. import models
 from ..auth import get_current_user
 from ..database import get_db
 from ..services import action_service
+from ..services.action_service import normalize_action_status
 
 router = APIRouter(prefix="/api/actions", tags=["actions"])
 
@@ -81,7 +82,11 @@ def list_pending(snapshot_month: str, department: str | None = None, db: Session
                 "is_abnormal": bool(snapshot.is_abnormal),
                 "abnormal_reasons": snapshot.abnormal_reasons,
                 "responsible_dept": action.responsible_dept if action else None,
-                "action_status": action.action_status if action else None,
+                "action_status": (
+                    normalize_action_status(action.action_status)
+                    if action and action.action_status and str(action.action_status).strip()
+                    else None
+                ),
                 "action_plan": action.action_plan if action else None,
                 "updated_by": action.updated_by if action else None,
             }

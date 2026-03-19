@@ -16,7 +16,7 @@ from .plant_service import derive_plant_group, normalize_plant_code
 
 # 责任部门和处理方案已改为自由文本输入，不再使用枚举。
 # 仅保留处理状态的枚举。
-STATUS_ENUMS = ["待处理", "讨论中", "进行中", "待定", "已完成", "已关闭"]
+STATUS_ENUMS = ["待定", "进行中", "已完成"]
 
 
 def _seed_admin(db: Session) -> None:
@@ -35,20 +35,30 @@ def _seed_admin(db: Session) -> None:
 
 
 def _seed_enums(db: Session) -> None:
-    """仅播种处理状态枚举。"""
-    existing = db.query(models.SysEnumConfig).filter(
+    """仅保留并维护三态处理状态枚举。"""
+    existing_rows = db.query(models.SysEnumConfig).filter(
         models.SysEnumConfig.enum_type == "action_status"
-    ).count()
-    if existing > 0:
-        return
+    ).all()
+    existing_map = {row.enum_value: row for row in existing_rows}
+
     for i, value in enumerate(STATUS_ENUMS, start=1):
-        db.add(
-            models.SysEnumConfig(
-                enum_type="action_status",
-                enum_value=value,
-                sort_order=i,
+        row = existing_map.get(value)
+        if row is None:
+            db.add(
+                models.SysEnumConfig(
+                    enum_type="action_status",
+                    enum_value=value,
+                    sort_order=i,
+                    is_active=True,
+                )
             )
-        )
+            continue
+        row.sort_order = i
+        row.is_active = True
+
+    for row in existing_rows:
+        if row.enum_value not in STATUS_ENUMS:
+            row.is_active = False
 
 
 def _seed_inventory(db: Session) -> None:
@@ -143,7 +153,7 @@ def _seed_inventory(db: Session) -> None:
             batch_no="BATCH-001",
             responsible_dept="质量",
             action_plan="按呆滞料流程处理",
-            action_status="讨论中",
+            action_status="进行中",
             reason_note="检测到异味",
             remark="待确认原因",
             claim_amount=0.0,
@@ -190,11 +200,11 @@ def initialize_sqlite_demo() -> None:
     db = SessionLocal()
     try:
         backfill_snapshot_plant_fields(db)
+        _seed_enums(db)
         if settings.database_dialect != "sqlite" or not settings.seed_sqlite_demo:
             db.commit()
             return
         _seed_admin(db)
-        _seed_enums(db)
         _seed_inventory(db)
         db.commit()
     finally:

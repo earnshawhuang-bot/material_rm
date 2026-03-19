@@ -13,6 +13,7 @@ from .. import schemas
 from ..auth import get_current_user
 from ..database import get_db
 from ..services import inventory_service
+from ..services.action_service import normalize_action_status
 from ..services.batch_service import normalize_batch_no
 from ..services.material_service import normalize_material_code
 from ..services.plant_service import build_plant_group_expr, normalize_plant_filter
@@ -52,6 +53,7 @@ def list_inventory(
     plant: str | None = None,
     category_primary: list[str] | None = Query(None),
     aging_category: list[str] | None = Query(None),
+    action_status: list[str] | None = Query(None),
     is_abnormal: bool | None = None,
     quality_flag: str | None = None,
     material_code: str | None = None,
@@ -70,6 +72,7 @@ def list_inventory(
         plant=plant,
         category_primary=category_primary,
         aging_category=aging_category,
+        action_status=action_status,
         is_abnormal=is_abnormal,
         quality_flag=quality_flag,
         material_code=material_code,
@@ -101,6 +104,7 @@ def get_stats(
     plant: str | None = None,
     category_primary: list[str] | None = Query(None),
     aging_category: list[str] | None = Query(None),
+    action_status: list[str] | None = Query(None),
     is_abnormal: bool | None = None,
     keyword: str | None = None,
     db: Session = Depends(get_db),
@@ -128,8 +132,6 @@ def get_stats(
         base = base.filter(snap.material_code.in_(matched_codes))
     if aging_category:
         base = base.filter(snap.aging_category.in_(aging_category))
-    if is_abnormal is not None:
-        base = base.filter(snap.is_abnormal == is_abnormal)
     if keyword:
         k = f"%{keyword}%"
         base = base.filter(
@@ -161,7 +163,34 @@ def get_stats(
     for row in action_rows:
         key = normalize_batch_no(row.batch_no)
         if key and key not in action_map:
-            action_map[key] = row.action_status
+            action_map[key] = normalize_action_status(row.action_status)
+
+    selected_status = [s.strip() for s in (action_status or []) if s and s.strip()]
+    status_set = {
+        normalize_action_status("待定" if s in {"__UNASSIGNED__", "未分配", "未填写"} else s)
+        for s in selected_status
+    }
+
+    def _status_match(status_value: str | None) -> bool:
+        if not status_set:
+            return True
+        normalized = normalize_action_status(status_value)
+        return normalized in status_set
+
+    rows_for_total: list[tuple] = []
+    for row in snapshot_rows:
+        status_value = normalize_action_status(action_map.get(normalize_batch_no(row.batch_no)))
+        if _status_match(status_value):
+            rows_for_total.append((row, status_value))
+
+    # 业务口径：总库存不受“异常状态”筛选影响，其它指标继续受异常状态影响
+    rows_for_metrics = rows_for_total
+    if is_abnormal is not None:
+        rows_for_metrics = [
+            (row, status_value)
+            for row, status_value in rows_for_total
+            if bool(row.is_abnormal) == is_abnormal
+        ]
 
     total = 0
     total_weight = 0.0
@@ -171,17 +200,18 @@ def get_stats(
     pending_weight = 0.0
     done = 0
     done_weight = 0.0
-    for row in snapshot_rows:
-        weight = float(row.weight_kg or 0.0)
+    for row, _ in rows_for_total:
         total += 1
-        total_weight += weight
+        total_weight += float(row.weight_kg or 0.0)
+
+    for row, status_value in rows_for_metrics:
+        weight = float(row.weight_kg or 0.0)
 
         if row.quality_flag == "N":
             defective += 1
             defective_weight += weight
 
-        status_value = action_map.get(normalize_batch_no(row.batch_no))
-        if bool(row.is_abnormal) and (status_value is None or not str(status_value).strip()):
+        if bool(row.is_abnormal) and status_value == "待定":
             pending += 1
             pending_weight += weight
 
@@ -389,7 +419,11 @@ def get_batch_detail(batch_no: str, snapshot_month: str, db: Session = Depends(g
             "reason_note": action.reason_note if action else None,
             "responsible_dept": action.responsible_dept if action else None,
             "action_plan": action.action_plan if action else None,
-            "action_status": action.action_status if action else None,
+            "action_status": (
+                normalize_action_status(action.action_status)
+                if action and action.action_status and str(action.action_status).strip()
+                else None
+            ),
             "remark": action.remark if action else None,
             "claim_amount": float(action.claim_amount) if action and action.claim_amount is not None else None,
             "claim_currency": action.claim_currency if action else None,

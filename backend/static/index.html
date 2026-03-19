@@ -147,6 +147,60 @@
             padding: 14px;
         }
         .chart-box { width: 100%; height: 240px; }
+
+        .filter-dropdown {
+            position: relative;
+            min-width: 150px;
+        }
+        .filter-trigger {
+            width: 100%;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 6px 32px 6px 10px;
+            font-size: 12px;
+            line-height: 1.2;
+            color: #334155;
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            position: relative;
+        }
+        .filter-trigger::after {
+            content: "▼";
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 10px;
+            color: #94a3b8;
+        }
+        .filter-panel {
+            position: absolute;
+            z-index: 40;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            max-height: 240px;
+            overflow: auto;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+            padding: 6px;
+        }
+        .filter-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #334155;
+            padding: 6px 8px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .filter-option:hover { background: #f8fafc; }
     </style>
 </head>
 <body>
@@ -176,7 +230,7 @@
             <p id="login-tip" class="text-red-400 text-xs mt-4 text-center min-h-[1rem]"></p>
             <div class="mt-8 p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/10">
                 <p class="text-indigo-300 text-[11px] leading-relaxed">
-                    <span class="font-bold">演示账号：</span><br>
+                    <span class="font-bold">演示账号:</span><br>
                     管理员: admin / 123456<br>
                     业务员: user / 123456
                 </p>
@@ -237,10 +291,10 @@
                 </div>
             </div>
 
-            <!-- 第一层：4行摘要 -->
+            <!-- 第一层:4行摘要 -->
             <div id="dash-summary" class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-700 leading-7"></div>
 
-            <!-- 第二层：4张 KPI 卡 -->
+            <!-- 第二层:4张 KPI 卡 -->
             <div class="grid grid-cols-2 xl:grid-cols-4 gap-3">
                 <div class="kpi-card">
                     <p class="kpi-title">总库存吨数</p>
@@ -258,20 +312,20 @@
                     <p id="kpi-normal-tons" class="kpi-sub">正常库存 0 t</p>
                 </div>
                 <div class="kpi-card">
-                    <p class="kpi-title">180天以上库存（正常）</p>
+                    <p class="kpi-title">180天以上库存(正常)</p>
                     <p id="kpi-over180-tons" class="kpi-value text-amber-600">0</p>
                     <p id="kpi-over180-rate" class="kpi-sub">占正常库存 0%</p>
                 </div>
             </div>
 
-            <!-- 第三层：Risk Composition -->
+            <!-- 第三层:Risk Composition -->
             <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">
                 <div class="chart-card">
-                    <h3 class="text-sm font-bold text-slate-700 mb-2">Risk Composition · 不良原因（超期 / 质量不良）</h3>
+                    <h3 class="text-sm font-bold text-slate-700 mb-2">Risk Composition · 不良原因(超期 / 质量不良)</h3>
                     <div id="ch-reason" class="chart-box"></div>
                 </div>
                 <div class="chart-card">
-                    <h3 class="text-sm font-bold text-slate-700 mb-2">Risk Composition · 不良品类（Category Primary）</h3>
+                    <h3 class="text-sm font-bold text-slate-700 mb-2">Risk Composition · 不良品类(Category Primary)</h3>
                     <div id="ch-category" class="chart-box"></div>
                 </div>
             </div>
@@ -279,12 +333,69 @@
             <!-- 第四层 -->
             <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">
                 <div class="chart-card">
-                    <h3 class="text-sm font-bold text-slate-700 mb-2">责任部门分布（不良品）</h3>
+                    <h3 class="text-sm font-bold text-slate-700 mb-2">责任部门分布(不良品)</h3>
                     <div id="ch-dept" class="chart-box"></div>
                 </div>
                 <div class="chart-card">
-                    <h3 class="text-sm font-bold text-slate-700 mb-2">供应商风险分布（不良品 Top）</h3>
+                    <h3 class="text-sm font-bold text-slate-700 mb-2">供应商风险分布(不良品 Top)</h3>
                     <div id="ch-supplier" class="chart-box"></div>
+                </div>
+            </div>
+
+            <!-- 第五层:执行进度 -->
+            <div class="grid grid-cols-1 xl:grid-cols-3 gap-3">
+                <div class="chart-card xl:col-span-2">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-bold text-slate-700">执行进度 · 100%状态堆叠(按吨数)</h3>
+                        <span id="dash-completion-badge" class="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700">完成率 0%</span>
+                    </div>
+                    <div id="dash-status-stacked" class="h-8 w-full rounded-lg overflow-hidden flex bg-slate-100"></div>
+                    <div id="dash-status-legend" class="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2"></div>
+                </div>
+                <div class="chart-card">
+                    <h3 class="text-sm font-bold text-slate-700 mb-3">执行状态摘要</h3>
+                    <div class="space-y-2 text-sm">
+                        <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                            <p class="text-xs font-bold text-amber-700">待处理</p>
+                            <p id="exec-pending-value" class="mt-1 text-slate-800 font-semibold">0 t · ¥0 · 0批次</p>
+                        </div>
+                        <div class="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2">
+                            <p class="text-xs font-bold text-sky-700">进行中</p>
+                            <p id="exec-in-progress-value" class="mt-1 text-slate-800 font-semibold">0 t · ¥0 · 0批次</p>
+                        </div>
+                        <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                            <p class="text-xs font-bold text-emerald-700">已完成</p>
+                            <p id="exec-done-value" class="mt-1 text-slate-800 font-semibold">0 t · ¥0 · 0批次</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 第六层:优先行动清单 -->
+            <div class="chart-card">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-700">优先行动清单 Top 5</h3>
+                        <p class="text-xs text-slate-500 mt-1">按 未分配责任部门 → 待处理 → 超期 → 吨数 从高到低排序，金额作为辅助信息。</p>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-xs">
+                        <thead>
+                            <tr class="border-b border-slate-200 text-slate-500 bg-slate-50">
+                                <th class="px-3 py-2 text-left font-bold">#</th>
+                                <th class="px-3 py-2 text-left font-bold">Batch No</th>
+                                <th class="px-3 py-2 text-left font-bold">供应商</th>
+                                <th class="px-3 py-2 text-left font-bold">物料</th>
+                                <th class="px-3 py-2 text-left font-bold">风险原因</th>
+                                <th class="px-3 py-2 text-left font-bold">责任部门</th>
+                                <th class="px-3 py-2 text-left font-bold">状态</th>
+                                <th class="px-3 py-2 text-right font-bold">吨数</th>
+                                <th class="px-3 py-2 text-right font-bold">金额</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dash-priority-tbody"></tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -312,7 +423,7 @@
                 <div class="bg-white p-4 rounded-2xl border border-slate-100 flex items-center gap-4">
                     <div class="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 font-bold text-lg flex-shrink-0">◷</div>
                     <div class="min-w-0">
-                        <p class="text-[11px] text-slate-400 font-medium">待处理吨数</p>
+                        <p class="text-[11px] text-slate-400 font-medium">待定吨数</p>
                         <p id="stat-pending" class="text-xl font-extrabold text-amber-600">0 t</p>
                         <p id="stat-pending-w" class="text-[11px] text-slate-400 font-medium mt-0.5">0 批次</p>
                     </div>
@@ -369,23 +480,36 @@
 
                     <div class="flex items-center gap-2">
                         <span class="text-xs font-bold text-slate-500">类型</span>
-                        <select id="rm-type-select" class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-indigo-500">
-                            <option value="">全部</option>
-                        </select>
+                        <div class="filter-dropdown">
+                            <button id="rm-type-btn" type="button" class="filter-trigger" title="全部">全部</button>
+                            <div id="rm-type-panel" class="filter-panel hidden">
+                                <div id="rm-type-options"></div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="h-8 w-[1px] bg-slate-100"></div>
 
                     <div class="flex items-center gap-2">
                         <span class="text-xs font-bold text-slate-500">库龄</span>
-                        <select id="aging-select" class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-indigo-500">
-                            <option value="">全部</option>
-                            <option value="A">A · 0–30天</option>
-                            <option value="B">B · 31–90天</option>
-                            <option value="C">C · 91–180天</option>
-                            <option value="D">D · 181–365天</option>
-                            <option value="E">E · &gt;365天</option>
-                        </select>
+                        <div class="filter-dropdown">
+                            <button id="aging-btn" type="button" class="filter-trigger" title="全部">全部</button>
+                            <div id="aging-panel" class="filter-panel hidden">
+                                <div id="aging-options"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="h-8 w-[1px] bg-slate-100"></div>
+
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold text-slate-500">处理状态</span>
+                        <div class="filter-dropdown">
+                            <button id="action-status-btn" type="button" class="filter-trigger" title="全部">全部</button>
+                            <div id="action-status-panel" class="filter-panel hidden">
+                                <div id="action-status-options"></div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="flex-1 min-w-[240px] relative">
@@ -492,7 +616,7 @@
         <div id="page-admin" class="hidden flex-1 p-6 max-w-[1800px] mx-auto w-full">
             <div class="mb-6">
                 <h2 class="text-lg font-bold text-slate-800">管理员工具</h2>
-                <p class="text-xs text-slate-400 mt-1">数据上传与基础配置维护，仅管理员可见</p>
+                <p class="text-xs text-slate-400 mt-1">数据上传与基础配置维护,仅管理员可见</p>
             </div>
             <!-- Diagnostic Panel -->
             <div class="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-6">
@@ -520,20 +644,15 @@
                         </div>
                     </div>
                     <form id="upload-form" class="space-y-4">
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-[11px] font-bold text-slate-400 mb-1.5">快照月</label>
-                                <input id="upload-month" type="month" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500">
-                            </div>
-                            <div class="flex items-end">
-                                <label class="flex items-center gap-2 text-xs text-slate-500 mb-2 cursor-pointer">
-                                    <input id="upload-strict-mode" type="checkbox" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
-                                    严格模式 (纸/铝/塑必齐)
-                                </label>
-                            </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1.5">快照月</label>
+                            <input id="upload-month" type="month" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                        </div>
+                        <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700 leading-5">
+                            上传后会覆盖该快照月同类型 SAP 数据。提交前请再次确认快照月与文件来源。
                         </div>
                         <div>
-                            <label class="block text-[11px] font-bold text-slate-400 mb-1.5">Excel 文件 (支持多选，纸/铝/塑一次上传)</label>
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1.5">Excel 文件 (支持多选,纸/铝/塑一次上传)</label>
                             <input id="upload-files" type="file" accept=".xlsx" multiple class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 cursor-pointer">
                         </div>
                         <button type="submit" class="w-full bg-slate-800 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-slate-900 transition-colors">开始上传并覆盖</button>
@@ -549,7 +668,7 @@
                         </div>
                         <div>
                             <h3 class="text-sm font-bold text-slate-800">Mapping 表维护</h3>
-                            <p class="text-[11px] text-slate-400">上传后全量覆盖，至少需含 SKU 列</p>
+                            <p class="text-[11px] text-slate-400">上传后全量覆盖,至少需含 SKU 列</p>
                         </div>
                     </div>
                     <form id="mapping-form" class="space-y-4">
@@ -565,27 +684,34 @@
 
                 <!-- Action Import -->
                 <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                    <div class="flex items-center gap-3 mb-5">
-                        <div class="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                    <button id="btn-toggle-action-import" type="button" class="w-full flex items-center justify-between gap-3 mb-1">
+                        <div class="flex items-center gap-3 text-left">
+                            <div class="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-800">离线处理记录导入</h3>
+                                <p class="text-[11px] text-slate-400">一次性导入场景为主，默认折叠</p>
+                            </div>
                         </div>
-                        <div>
-                            <h3 class="text-sm font-bold text-slate-800">离线处理记录导入</h3>
-                            <p class="text-[11px] text-slate-400">将线下 Excel 中的行动项导入系统（仅匹配异常批次）</p>
+                        <span id="action-import-arrow" class="text-xs text-slate-400">展开 ▼</span>
+                    </button>
+                    <div id="action-import-body" class="hidden mt-4">
+                        <p class="text-[11px] text-slate-400 mb-3">将线下 Excel 中的行动项导入系统(仅匹配异常批次)</p>
+                        <form id="action-import-form" class="space-y-4">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-400 mb-1.5">快照月</label>
+                                <input id="action-import-month" type="month" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-500">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-400 mb-1.5">线下处理记录 Excel</label>
+                                <input id="action-import-file" type="file" accept=".xlsx,.xls" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-emerald-50 file:text-emerald-600 hover:file:bg-emerald-100 cursor-pointer">
+                            </div>
+                            <button type="submit" class="w-full bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-700 transition-colors">导入处理记录</button>
+                        </form>
+                        <p id="action-import-msg" class="text-[11px] mt-3 text-slate-400"></p>
+                        <p class="text-[11px] mt-1 text-slate-400">导入逻辑为补空不覆盖，优先保护已登记信息。</p>
                         </div>
-                    </div>
-                    <form id="action-import-form" class="space-y-4">
-                        <div>
-                            <label class="block text-[11px] font-bold text-slate-400 mb-1.5">快照月</label>
-                            <input id="action-import-month" type="month" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-500">
-                        </div>
-                        <div>
-                            <label class="block text-[11px] font-bold text-slate-400 mb-1.5">线下处理记录 Excel</label>
-                            <input id="action-import-file" type="file" accept=".xlsx,.xls" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-emerald-50 file:text-emerald-600 hover:file:bg-emerald-100 cursor-pointer">
-                        </div>
-                        <button type="submit" class="w-full bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-700 transition-colors">导入处理记录</button>
-                    </form>
-                    <p id="action-import-msg" class="text-[11px] mt-3 text-slate-400"></p>
                 </div>
             </div>
 
@@ -595,7 +721,7 @@
                         <span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span>
                         <span class="text-sm font-bold text-slate-700">未匹配物料</span>
                         <span id="unmatched-count" class="text-xs font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">0 个物料</span>
-                        <span class="text-xs text-slate-400">— 以下物料编号在 Mapping 表中未找到对应 SKU，已按物料聚合</span>
+                        <span class="text-xs text-slate-400">— 以下物料编号在 Mapping 表中未找到对应 SKU,已按物料聚合</span>
                     </div>
                     <div class="flex items-center gap-2">
                         <button id="btn-toggle-unmatched" class="text-xs text-slate-500 hover:text-slate-800 border border-slate-200 rounded-lg px-3 py-1 hover:bg-slate-50">展开</button>
@@ -695,9 +821,35 @@ const state = {
     pageSize: 12,
     total:   0,
     dashCharts: {},   // ECharts instances
+    inventoryFilters: {
+        rmType: [],
+        aging: [],
+        actionStatus: [],
+    },
+    inventoryFilterOptions: {
+        rmType: [],
+        aging: [
+            { value: "A", label: "A · 0–30天" },
+            { value: "B", label: "B · 31–90天" },
+            { value: "C", label: "C · 91–180天" },
+            { value: "D", label: "D · 181–365天" },
+            { value: "E", label: "E · >365天" },
+        ],
+        actionStatus: [
+            { value: "待定", label: "待定" },
+            { value: "进行中", label: "进行中" },
+            { value: "已完成", label: "已完成" },
+        ],
+    },
 };
 
 const $ = (id) => document.getElementById(id);
+
+const INVENTORY_FILTER_META = {
+    rmType: { btnId: "rm-type-btn", panelId: "rm-type-panel", optionsId: "rm-type-options" },
+    aging: { btnId: "aging-btn", panelId: "aging-panel", optionsId: "aging-options" },
+    actionStatus: { btnId: "action-status-btn", panelId: "action-status-panel", optionsId: "action-status-options" },
+};
 
 // ══════════════════════════════════════════════════════
 //  HELPERS
@@ -755,18 +907,133 @@ function showPage(page) {
     if (page === "admin" && typeof loadUsers === "function") loadUsers();
 }
 
+function normalizeStatusValue(v) {
+    const raw = String(v || "").trim();
+    const lower = raw.toLowerCase();
+    if (!raw || raw === "待处理" || raw === "待定" || lower === "pending") return "待定";
+    if (raw === "进行中" || raw === "讨论中" || lower === "in progress") return "进行中";
+    if (raw === "已完成" || raw === "已关闭" || lower === "done" || lower === "completed") return "已完成";
+    return "待定";
+}
+
 function statusTag(v) {
+    const normalized = normalizeStatusValue(v);
     const colors = {
-        "待处理":"#94a3b8", "讨论中":"#3b82f6", "进行中":"#f59e0b",
-        "待定":"#8b5cf6", "已完成":"#10b981", "已关闭":"#6b7280"
+        "待定": "#8b5cf6",
+        "进行中": "#f59e0b",
+        "已完成": "#10b981",
     };
     const bgs = {
-        "待处理":"#f1f5f9", "讨论中":"#eff6ff", "进行中":"#fffbeb",
-        "待定":"#f5f3ff", "已完成":"#ecfdf5", "已关闭":"#f3f4f6"
+        "待定": "#f5f3ff",
+        "进行中": "#fffbeb",
+        "已完成": "#ecfdf5",
     };
-    const c = colors[v] || "#94a3b8";
-    const bg = bgs[v] || "#f1f5f9";
-    return `<span class="tag" style="color:${c}; background:${bg}">${v||"未分配"}</span>`;
+    const c = colors[normalized] || "#94a3b8";
+    const bg = bgs[normalized] || "#f1f5f9";
+    return `<span class="tag" style="color:${c}; background:${bg}">${normalized}</span>`;
+}
+
+function _sanitizeFilterValues(values, options) {
+    const validSet = new Set((options || []).map(o => o.value));
+    const unique = [...new Set((values || []).filter(v => validSet.has(v)))];
+    if (!unique.length || unique.length === validSet.size) return [];
+    return unique;
+}
+
+function _getEffectiveFilterValues(key) {
+    const options = state.inventoryFilterOptions[key] || [];
+    return _sanitizeFilterValues(state.inventoryFilters[key], options);
+}
+
+function _closeAllFilterPanels(exceptKey = null) {
+    Object.entries(INVENTORY_FILTER_META).forEach(([key, meta]) => {
+        if (key === exceptKey) return;
+        const panel = $(meta.panelId);
+        if (panel) panel.classList.add("hidden");
+    });
+}
+
+function _updateFilterTriggerLabel(key) {
+    const meta = INVENTORY_FILTER_META[key];
+    if (!meta) return;
+    const btn = $(meta.btnId);
+    if (!btn) return;
+
+    const options = state.inventoryFilterOptions[key] || [];
+    const selectedValues = _sanitizeFilterValues(state.inventoryFilters[key], options);
+    if (!selectedValues.length) {
+        btn.textContent = "全部";
+        btn.title = "全部";
+        return;
+    }
+
+    const labelMap = new Map(options.map(o => [o.value, o.label]));
+    const labels = selectedValues.map(v => labelMap.get(v) || v);
+    const text = labels.join("、");
+    btn.textContent = text;
+    btn.title = text;
+}
+
+function _renderFilterOptions(key) {
+    const meta = INVENTORY_FILTER_META[key];
+    if (!meta) return;
+    const container = $(meta.optionsId);
+    if (!container) return;
+
+    const options = state.inventoryFilterOptions[key] || [];
+    const selectedValues = _sanitizeFilterValues(state.inventoryFilters[key], options);
+    const selectedSet = new Set(selectedValues);
+    const allChecked = selectedValues.length === 0;
+
+    const html = [
+        `<label class="filter-option"><input type="checkbox" data-filter-key="${key}" data-filter-all="1" ${allChecked ? "checked" : ""}> 全部</label>`,
+        ...options.map((opt) => (
+            `<label class="filter-option"><input type="checkbox" data-filter-key="${key}" value="${opt.value}" ${selectedSet.has(opt.value) ? "checked" : ""}> ${opt.label}</label>`
+        )),
+    ].join("");
+
+    container.innerHTML = html;
+    container.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+        input.onchange = () => {
+            const currentOptions = state.inventoryFilterOptions[key] || [];
+            if (input.dataset.filterAll === "1") {
+                state.inventoryFilters[key] = [];
+            } else {
+                const set = new Set(_sanitizeFilterValues(state.inventoryFilters[key], currentOptions));
+                if (input.checked) set.add(input.value);
+                else set.delete(input.value);
+                state.inventoryFilters[key] = _sanitizeFilterValues([...set], currentOptions);
+            }
+            _renderFilterOptions(key);
+            _updateFilterTriggerLabel(key);
+            state.page = 1;
+            loadInventory();
+        };
+    });
+}
+
+function setInventoryFilterOptions(key, options) {
+    state.inventoryFilterOptions[key] = options || [];
+    state.inventoryFilters[key] = _sanitizeFilterValues(state.inventoryFilters[key], state.inventoryFilterOptions[key]);
+    _renderFilterOptions(key);
+    _updateFilterTriggerLabel(key);
+}
+
+function initInventoryFilterDropdowns() {
+    Object.entries(INVENTORY_FILTER_META).forEach(([key, meta]) => {
+        const btn = $(meta.btnId);
+        const panel = $(meta.panelId);
+        if (!btn || !panel) return;
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            const willOpen = panel.classList.contains("hidden");
+            _closeAllFilterPanels(key);
+            panel.classList.toggle("hidden", !willOpen);
+        };
+        panel.onclick = (e) => e.stopPropagation();
+    });
+
+    document.addEventListener("click", () => _closeAllFilterPanels());
 }
 
 // ══════════════════════════════════════════════════════
@@ -810,6 +1077,15 @@ function initResizing() {
 async function loadEnums() {
     const statusRes = await authFetch("/api/enums/action_status");
     state.enums.status = statusRes.items || [];
+    const canonical = ["待定", "进行中", "已完成"];
+    const enumValues = (state.enums.status || [])
+        .map((i) => normalizeStatusValue(i.enum_value))
+        .filter((v, idx, arr) => canonical.includes(v) && arr.indexOf(v) === idx);
+    const values = enumValues.length ? enumValues : canonical;
+    setInventoryFilterOptions(
+        "actionStatus",
+        values.map((v) => ({ value: v, label: v })),
+    );
 }
 
 async function loadMonths() {
@@ -834,9 +1110,10 @@ async function loadCategoryPrimaries() {
     if (!month) return;
     try {
         const data = await authFetch(`/api/inventory/category-primaries?snapshot_month=${month}`);
-        const sel = $("rm-type-select");
-        sel.innerHTML = '<option value="">全部</option>' +
-            (data.items || []).map(c => `<option value="${c}">${c}</option>`).join("");
+        setInventoryFilterOptions(
+            "rmType",
+            (data.items || []).map((c) => ({ value: c, label: c })),
+        );
     } catch (err) {
         console.warn("Failed to load category primaries:", err);
     }
@@ -894,8 +1171,9 @@ async function loadUnmatched() {
 
 async function loadInventory() {
     const abnormal   = $("abnormal-select").value;
-    const rmType     = $("rm-type-select").value;
-    const aging      = $("aging-select").value;
+    const rmTypes    = _getEffectiveFilterValues("rmType");
+    const aging      = _getEffectiveFilterValues("aging");
+    const actionStatus = _getEffectiveFilterValues("actionStatus");
     const keyword    = $("keyword").value.trim();
     const month      = $("month-select").value;
     const plantLabel = $("plant-select").value;
@@ -911,8 +1189,9 @@ async function loadInventory() {
     if (plantLabel) q.set("plant", plantLabel);
 
     if (abnormal !== "") q.set("is_abnormal", abnormal);
-    if (rmType)          q.set("category_primary", rmType);
-    if (aging)           q.set("aging_category", aging);
+    rmTypes.forEach((v) => q.append("category_primary", v));
+    aging.forEach((v) => q.append("aging_category", v));
+    actionStatus.forEach((v) => q.append("action_status", v));
     if (keyword)         q.set("keyword", keyword);
 
     try {
@@ -935,15 +1214,17 @@ function _buildStatsParams() {
     const month      = $("month-select").value;
     const plantLabel = $("plant-select").value;
     const abnormal   = $("abnormal-select").value;
-    const rmType     = $("rm-type-select").value;
-    const aging      = $("aging-select").value;
+    const rmTypes    = _getEffectiveFilterValues("rmType");
+    const aging      = _getEffectiveFilterValues("aging");
+    const actionStatus = _getEffectiveFilterValues("actionStatus");
     const keyword    = $("keyword").value.trim();
 
     const q = new URLSearchParams({ snapshot_month: month });
     if (plantLabel) q.set("plant", plantLabel);
     if (abnormal !== "")  q.set("is_abnormal", abnormal);
-    if (rmType)           q.set("category_primary", rmType);
-    if (aging)            q.set("aging_category", aging);
+    rmTypes.forEach((v) => q.append("category_primary", v));
+    aging.forEach((v) => q.append("aging_category", v));
+    actionStatus.forEach((v) => q.append("action_status", v));
     if (keyword)          q.set("keyword", keyword);
     return q;
 }
@@ -953,8 +1234,8 @@ async function loadStats() {
     if (!month) return;
     try {
         const s   = await authFetch(`/api/inventory/stats?${_buildStatsParams()}`);
-        const fmt  = (n) => Number(n).toLocaleString();
-        const fmtW = (w) => `${Number(w).toLocaleString()} t`;
+        const fmt  = (n) => Math.round(Number(n || 0)).toLocaleString("zh-CN");
+        const fmtW = (w) => `${Math.round(Number(w || 0)).toLocaleString("zh-CN")} t`;
 
         $("stat-total").textContent       = fmtW(s.total_weight);
         $("stat-total-w").textContent     = `${fmt(s.total)} 批次`;
@@ -1037,8 +1318,12 @@ function renderReadRow(row) {
 }
 
 function renderEditRow(row) {
-    const statusOptions = ["已完成", "进行中", "待定"];
-    const currentStatus = statusOptions.includes(row.action_status) ? row.action_status : "待定";
+    const enumStatus = (state.enums.status || [])
+        .map((i) => normalizeStatusValue(i.enum_value))
+        .filter((v, idx, arr) => arr.indexOf(v) === idx);
+    const statusOptions = enumStatus.length ? enumStatus : ["待定", "进行中", "已完成"];
+    const normalizedCurrent = normalizeStatusValue(row.action_status);
+    const currentStatus = statusOptions.includes(normalizedCurrent) ? normalizedCurrent : "待定";
     const opt = (list, val) => list.map(v => `<option value="${v}" ${v===val?'selected':''}>${v}</option>`).join("");
     return `
         <tr class="editing">
@@ -1135,7 +1420,7 @@ function logout() {
 }
 
 // ══════════════════════════════════════════════════════
-//  DASHBOARD（管理层视角）
+//  DASHBOARD(管理层视角)
 // ══════════════════════════════════════════════════════
 async function loadDashboard() {
     const month = $("dash-month").value;
@@ -1152,6 +1437,8 @@ async function loadDashboard() {
         renderDashSummary(d);
         renderDashKPIs(d);
         renderDashCharts(d);
+        renderDashExecution(d);
+        renderDashPriorityActions(d);
     } catch (err) {
         console.error("Dashboard load failed:", err);
     }
@@ -1173,6 +1460,16 @@ function _fmtAmt(v) {
     return `¥${Number(v || 0).toLocaleString("zh-CN", { maximumFractionDigits: 2 })}`;
 }
 
+function _esc(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+    }[ch]));
+}
+
 function _topByTons(items) {
     if (!items || !items.length) return null;
     return [...items].sort((a, b) => (b.weight_tons || 0) - (a.weight_tons || 0))[0];
@@ -1186,10 +1483,10 @@ function renderDashSummary(d) {
     const topSupplier = _topByTons(d.supplier_breakdown || []);
 
     const lines = [
-        `1. 当前筛选范围总库存为 ${_fmtTon(d.total_weight_tons)}，其中不良库存 ${_fmtTon(d.abnormal_weight_tons)}（不良占比 ${_fmtPct(d.abnormal_rate)}）。`,
-        `2. 正常库存为 ${_fmtTon(d.normal_weight_tons)}，其中 180天以上库存 ${_fmtTon(d.over_180_weight_tons)}（占正常库存 ${_fmtPct(d.over_180_rate)}）。`,
-        `3. 不良原因结构已归并为两类：超期 ${_fmtTon(reasonOverdue.weight_tons)}（${_fmtPct(reasonOverdue.ratio)}），质量不良 ${_fmtTon(reasonQuality.weight_tons)}（${_fmtPct(reasonQuality.ratio)}）。`,
-        `4. 风险重心${topCategory ? `在品类 ${topCategory.name}（${_fmtTon(topCategory.weight_tons)}，${_fmtPct(topCategory.ratio)}）` : "暂无明显品类集中"}${topSupplier ? `，重点供应商为 ${topSupplier.name}（${_fmtTon(topSupplier.weight_tons)}，${_fmtPct(topSupplier.ratio)}）。` : "，当前筛选下暂无供应商风险数据。"}`
+        `1. 当前筛选范围总库存为 ${_fmtTon(d.total_weight_tons)},其中不良库存 ${_fmtTon(d.abnormal_weight_tons)}(不良占比 ${_fmtPct(d.abnormal_rate)})。`,
+        `2. 正常库存为 ${_fmtTon(d.normal_weight_tons)},其中 180天以上库存 ${_fmtTon(d.over_180_weight_tons)}(占正常库存 ${_fmtPct(d.over_180_rate)})。`,
+        `3. 不良原因结构已归并为两类:超期 ${_fmtTon(reasonOverdue.weight_tons)}(${_fmtPct(reasonOverdue.ratio)}),质量不良 ${_fmtTon(reasonQuality.weight_tons)}(${_fmtPct(reasonQuality.ratio)})。`,
+        `4. 风险重心${topCategory ? `在品类 ${topCategory.name}(${_fmtTon(topCategory.weight_tons)},${_fmtPct(topCategory.ratio)})` : "暂无明显品类集中"}${topSupplier ? `,重点供应商为 ${topSupplier.name}(${_fmtTon(topSupplier.weight_tons)},${_fmtPct(topSupplier.ratio)})。` : ",当前筛选下暂无供应商风险数据。"}`
     ];
 
     el.innerHTML = lines.map(text => `<div>${text}</div>`).join("");
@@ -1295,6 +1592,90 @@ function renderDashCharts(d) {
     });
 }
 
+function renderDashExecution(d) {
+    const statusColors = {
+        "待处理": "#f59e0b",
+        "进行中": "#0ea5e9",
+        "待定": "#94a3b8",
+        "已完成": "#10b981",
+        "已关闭": "#64748b",
+    };
+    const rows = d.status_breakdown || [];
+    const totalTons = rows.reduce((sum, row) => sum + Number(row.weight_tons || 0), 0);
+
+    $("dash-completion-badge").textContent = `完成率 ${_fmtPct(d.completion_rate)}`;
+    $("exec-pending-value").textContent = `${_fmtTon(d.pending_weight_tons)} · ${_fmtAmt(d.pending_amount_cny)} · ${_fmtInt(d.pending_batch_count)}批次`;
+    $("exec-in-progress-value").textContent = `${_fmtTon(d.in_progress_weight_tons)} · ${_fmtAmt(d.in_progress_amount_cny)} · ${_fmtInt(d.in_progress_batch_count)}批次`;
+    $("exec-done-value").textContent = `${_fmtTon(d.done_weight_tons)} · ${_fmtAmt(d.done_amount_cny)} · ${_fmtInt(d.done_batch_count)}批次`;
+
+    const stacked = $("dash-status-stacked");
+    const legend = $("dash-status-legend");
+
+    if (!rows.length || totalTons <= 0) {
+        stacked.innerHTML = `<div class="w-full h-full flex items-center justify-center text-xs text-slate-400">暂无数据</div>`;
+        legend.innerHTML = "";
+        return;
+    }
+
+    stacked.innerHTML = rows
+        .map((row) => {
+            const tons = Number(row.weight_tons || 0);
+            const ratio = tons > 0 ? tons / totalTons * 100 : 0;
+            const color = statusColors[row.name] || "#94a3b8";
+            const tip = `${row.name}: ${_fmtTon(tons)} / ${_fmtPct(ratio)} / ${_fmtAmt(row.amount_cny)} / ${_fmtInt(row.batch_count)}批`;
+            return `<div class="h-full" style="width:${ratio.toFixed(2)}%;background:${color}" title="${_esc(tip)}"></div>`;
+        })
+        .join("");
+
+    legend.innerHTML = rows
+        .map((row) => {
+            const tons = Number(row.weight_tons || 0);
+            const ratio = totalTons > 0 ? tons / totalTons * 100 : 0;
+            const color = statusColors[row.name] || "#94a3b8";
+            return `
+                <div class="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">
+                    <p class="text-xs text-slate-500 flex items-center gap-1.5">
+                        <span class="inline-block w-2.5 h-2.5 rounded-full" style="background:${color}"></span>
+                        ${_esc(row.name)}
+                    </p>
+                    <p class="mt-1 text-sm font-bold text-slate-800">${_fmtTon(tons)} · ${_fmtPct(ratio)}</p>
+                    <p class="text-[11px] text-slate-500">金额 ${_fmtAmt(row.amount_cny)} · ${_fmtInt(row.batch_count)}批次</p>
+                </div>
+            `;
+        })
+        .join("");
+}
+
+function renderDashPriorityActions(d) {
+    const tbody = $("dash-priority-tbody");
+    const rows = d.priority_actions || [];
+    if (!rows.length) {
+        tbody.innerHTML = `
+            <tr class="border-b border-slate-100">
+                <td colspan="9" class="px-3 py-6 text-center text-slate-400">当前筛选下暂无需优先催办的批次</td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = rows.map((row, idx) => {
+        const materialText = [row.material_code, row.material_name].filter(Boolean).join(" · ");
+        return `
+            <tr class="border-b border-slate-100 hover:bg-slate-50">
+                <td class="px-3 py-2 font-bold text-slate-600">${idx + 1}</td>
+                <td class="px-3 py-2 font-mono text-slate-700">${_esc(row.batch_no || "-")}</td>
+                <td class="px-3 py-2 text-slate-700">${_esc(row.supplier_name || "-")}</td>
+                <td class="px-3 py-2 text-slate-700">${_esc(materialText || "-")}</td>
+                <td class="px-3 py-2 text-slate-700">${_esc(row.reason || "-")}</td>
+                <td class="px-3 py-2 text-slate-700">${_esc(row.responsible_dept || "-")}</td>
+                <td class="px-3 py-2 text-slate-700">${_esc(row.action_status || "-")}</td>
+                <td class="px-3 py-2 text-right font-semibold text-slate-800">${_fmtTon(row.weight_tons)}</td>
+                <td class="px-3 py-2 text-right font-semibold text-slate-800">${_fmtAmt(row.amount_cny)}</td>
+            </tr>
+        `;
+    }).join("");
+}
+
 window.addEventListener("resize", () => {
     Object.values(state.dashCharts).forEach(c => { if (c && !c.isDisposed()) c.resize(); });
 });
@@ -1376,8 +1757,15 @@ $("btn-download-unmatched").onclick = () => {
 $("btn-reset").onclick = () => {
     $("plant-select").value    = "";
     $("abnormal-select").value = "";
-    $("rm-type-select").value  = "";
-    $("aging-select").value    = "";
+    state.inventoryFilters.rmType = [];
+    state.inventoryFilters.aging = [];
+    state.inventoryFilters.actionStatus = [];
+    _renderFilterOptions("rmType");
+    _renderFilterOptions("aging");
+    _renderFilterOptions("actionStatus");
+    _updateFilterTriggerLabel("rmType");
+    _updateFilterTriggerLabel("aging");
+    _updateFilterTriggerLabel("actionStatus");
     $("keyword").value         = "";
     $("btn-clear-keyword").classList.add("hidden");
     state.page = 1;
@@ -1386,8 +1774,6 @@ $("btn-reset").onclick = () => {
 $("month-select").onchange = () => { state.page = 1; loadCategoryPrimaries(); loadInventory(); };
 $("plant-select").onchange = () => { state.page = 1; loadInventory(); };
 $("abnormal-select").onchange = () => { state.page = 1; loadInventory(); };
-$("rm-type-select").onchange = () => { state.page = 1; loadInventory(); };
-$("aging-select").onchange  = () => { state.page = 1; loadInventory(); };
 $("keyword").oninput = () => {
     $("btn-clear-keyword").classList.toggle("hidden", !$("keyword").value);
 };
@@ -1401,10 +1787,22 @@ $("btn-clear-keyword").onclick = () => {
 
 $("upload-form").onsubmit = async (e) => {
     e.preventDefault();
+    const month = $("upload-month").value;
+    const files = Array.from($("upload-files").files || []);
+    if (!month) {
+        $("upload-msg").textContent = "请先选择快照月";
+        return;
+    }
+    if (!files.length) {
+        $("upload-msg").textContent = "请先选择上传文件";
+        return;
+    }
+    const proceed = confirm(`即将覆盖快照月 ${month} 的 SAP 数据（按 Paper/AL/PE 分类型覆盖）。请确认月份与文件来源无误。`);
+    if (!proceed) return;
+
     const fd = new FormData();
-    fd.set("snapshot_month", $("upload-month").value);
-    fd.set("strict_mode", $("upload-strict-mode").checked);
-    Array.from($("upload-files").files).forEach(f => fd.append("files", f));
+    fd.set("snapshot_month", month);
+    files.forEach(f => fd.append("files", f));
     try {
         $("upload-msg").textContent = "上传中...";
         const res = await authFetch("/api/upload/sap-data/batch", { method: "POST", body: fd });
@@ -1435,7 +1833,7 @@ $("btn-diag").onclick = async () => {
         );
         const nullCount = data.filter(r => r.quality_flag === null).length;
         const total = data.length;
-        pre.textContent = `共 ${total} 条（最多显示30条），quality_flag 为 null 的有 ${nullCount} 条\n\n` + lines.join("\n");
+        pre.textContent = `共 ${total} 条(最多显示30条),quality_flag 为 null 的有 ${nullCount} 条\n\n` + lines.join("\n");
     } catch(err) {
         $("diag-result").classList.remove("hidden");
         $("diag-result").textContent = "诊断失败: " + err.message;
@@ -1444,8 +1842,16 @@ $("btn-diag").onclick = async () => {
 
 $("mapping-form").onsubmit = async (e) => {
     e.preventDefault();
+    const file = $("mapping-file").files[0];
+    if (!file) {
+        $("mapping-msg").textContent = "请先选择 Mapping 文件";
+        return;
+    }
+    const proceed = confirm("Mapping 上传会全量覆盖当前映射关系，并回填历史快照分类。确认继续吗？");
+    if (!proceed) return;
+
     const fd = new FormData();
-    fd.append("file", $("mapping-file").files[0]);
+    fd.append("file", file);
     try {
         $("mapping-msg").textContent = "上传中...";
         const res = await authFetch("/api/mapping/upload", { method: "POST", body: fd });
@@ -1561,6 +1967,17 @@ $("action-import-form").onsubmit = async (e) => {
         $("action-import-msg").textContent = "导入失败: " + err.message;
     }
 };
+
+$("btn-toggle-action-import").onclick = () => {
+    const body = $("action-import-body");
+    const arrow = $("action-import-arrow");
+    const hidden = body.classList.toggle("hidden");
+    arrow.textContent = hidden ? "展开 ▼" : "收起 ▲";
+};
+
+setInventoryFilterOptions("aging", state.inventoryFilterOptions.aging);
+setInventoryFilterOptions("actionStatus", state.inventoryFilterOptions.actionStatus);
+initInventoryFilterDropdowns();
 
 init();
 </script>

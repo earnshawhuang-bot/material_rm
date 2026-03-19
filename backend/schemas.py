@@ -44,6 +44,7 @@ class InventoryFilterParams(BaseModel):
     plant: Optional[str] = None   # accepts plant_group (KS/IDN) or plant_code
     category_primary: Optional[list[str]] = None   # replaces rm_category for user-facing filter
     aging_category: Optional[list[str]] = None
+    action_status: Optional[list[str]] = None
     is_abnormal: Optional[bool] = None
     quality_flag: Optional[str] = None
     material_code: Optional[str] = None
@@ -257,6 +258,18 @@ class DashboardBreakdownItem(BaseModel):
     batch_count: int = 0
 
 
+class DashboardPriorityActionItem(BaseModel):
+    batch_no: str
+    material_code: Optional[str] = None
+    material_name: Optional[str] = None
+    supplier_name: Optional[str] = None
+    reason: str
+    responsible_dept: str
+    action_status: str
+    weight_tons: int
+    amount_cny: float = 0.0
+
+
 class DashboardOverview(BaseModel):
     """GET /api/dashboard/overview — GM 首页口径。"""
     total_weight_tons: int
@@ -269,7 +282,19 @@ class DashboardOverview(BaseModel):
     over_180_weight_tons: int
     over_180_amount_cny: float
     over_180_rate: int
+    pending_weight_tons: int
+    pending_amount_cny: float
+    pending_batch_count: int
+    in_progress_weight_tons: int
+    in_progress_amount_cny: float
+    in_progress_batch_count: int
+    done_weight_tons: int
+    done_amount_cny: float
+    done_batch_count: int
+    completion_rate: int
     reason_breakdown: list[DashboardBreakdownItem]
     category_breakdown: list[DashboardBreakdownItem]
     dept_breakdown: list[DashboardBreakdownItem]
     supplier_breakdown: list[DashboardBreakdownItem]
+    status_breakdown: list[DashboardBreakdownItem]
+    priority_actions: list[DashboardPriorityActionItem]

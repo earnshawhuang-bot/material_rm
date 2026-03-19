@@ -77,7 +77,7 @@ class BatchAction(Base):
     reason_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     responsible_dept: Mapped[str | None] = mapped_column(String(100), nullable=True)
     action_plan: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    action_status: Mapped[str | None] = mapped_column(String(20), default="待处理")
+    action_status: Mapped[str | None] = mapped_column(String(20), default="待定")
     remark: Mapped[str | None] = mapped_column(String(500), nullable=True)
     claim_amount: Mapped[float | None] = mapped_column(DECIMAL(18, 2), nullable=True)
     claim_currency: Mapped[str | None] = mapped_column(String(5), nullable=True)

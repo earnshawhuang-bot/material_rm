@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Tuple
 
-from sqlalchemy import and_, desc, asc
+from sqlalchemy import and_, asc, case, desc, func, literal
 from sqlalchemy.orm import Session, aliased
 
 from .. import models, schemas
+from .action_service import normalize_action_status
 from .batch_service import normalize_batch_no
 from .material_service import normalize_material_code
 from .plant_service import build_plant_group_expr, normalize_plant_filter
@@ -63,6 +64,33 @@ def list_inventory(
         models.InventorySnapshot.plant_group,
     )
     action_alias = aliased(models.BatchAction)
+    normalized_status_expr = case(
+        (
+            func.trim(func.coalesce(action_alias.action_status, "")).in_(["", "待处理", "待定"]),
+            literal("待定"),
+        ),
+        (
+            func.lower(func.trim(func.coalesce(action_alias.action_status, ""))).in_(["pending"]),
+            literal("待定"),
+        ),
+        (
+            func.trim(func.coalesce(action_alias.action_status, "")).in_(["进行中", "讨论中"]),
+            literal("进行中"),
+        ),
+        (
+            func.lower(func.trim(func.coalesce(action_alias.action_status, ""))).in_(["in progress"]),
+            literal("进行中"),
+        ),
+        (
+            func.trim(func.coalesce(action_alias.action_status, "")).in_(["已完成", "已关闭"]),
+            literal("已完成"),
+        ),
+        (
+            func.lower(func.trim(func.coalesce(action_alias.action_status, ""))).in_(["done", "completed"]),
+            literal("已完成"),
+        ),
+        else_=literal("待定"),
+    )
     query = (
         db.query(models.InventorySnapshot, action_alias)
         .outerjoin(
@@ -92,6 +120,16 @@ def list_inventory(
         query = query.filter(models.InventorySnapshot.material_code.in_(matched_codes))
     if params.aging_category:
         query = query.filter(models.InventorySnapshot.aging_category.in_(params.aging_category))
+    if params.action_status:
+        selected_status = [s.strip() for s in params.action_status if s and s.strip()]
+        if selected_status:
+            selected_canonical = sorted(
+                {
+                    normalize_action_status("待定" if s in {"__UNASSIGNED__", "未分配", "未填写"} else s)
+                    for s in selected_status
+                }
+            )
+            query = query.filter(normalized_status_expr.in_(selected_canonical))
     if params.is_abnormal is not None:
         query = query.filter(models.InventorySnapshot.is_abnormal == params.is_abnormal)
     if params.quality_flag:
@@ -175,7 +213,11 @@ def list_inventory(
             reason_note=action.reason_note if action else None,
             responsible_dept=action.responsible_dept if action else None,
             action_plan=action.action_plan if action else None,
-            action_status=action.action_status if action else None,
+            action_status=(
+                normalize_action_status(action.action_status)
+                if action and action.action_status and str(action.action_status).strip()
+                else None
+            ),
             remark=action.remark if action else None,
             claim_amount=float(action.claim_amount) if action and action.claim_amount is not None else None,
             claim_currency=action.claim_currency if action else None,

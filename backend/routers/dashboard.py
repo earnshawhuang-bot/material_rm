@@ -3,19 +3,22 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import and_, case, func, literal
+from sqlalchemy import and_, case, func, literal, or_
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..auth import get_current_user
 from ..database import get_db
 from ..services import inventory_service
+from ..services.action_service import normalize_action_status
 from ..services.plant_service import build_plant_group_expr
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 IDR_TO_CNY = 2300
 TOP_SUPPLIER_LIMIT = 8
+TOP_PRIORITY_LIMIT = 5
+STATUS_DISPLAY_ORDER = ["待定", "进行中", "已完成"]
 
 
 def _cost_as_cny(cost_col, currency_col):
@@ -65,6 +68,10 @@ def _build_item(
     )
 
 
+def _normalize_status_label(raw_status: str | None) -> str:
+    return normalize_action_status(raw_status)
+
+
 @router.get("/overview", response_model=schemas.DashboardOverview)
 def dashboard_overview(
     month: str = Query(..., description="快照月份 YYYY-MM"),
@@ -78,6 +85,35 @@ def dashboard_overview(
     plant_group_expr = build_plant_group_expr(snap.plant, snap.plant_group)
     cost_cny = _cost_as_cny(snap.financial_cost, snap.currency)
     reason_expr = _reason_group_expr(snap.obsolete_reason_desc)
+    action_join_expr = and_(
+        act.snapshot_month == snap.snapshot_month,
+        act.batch_no == snap.batch_no,
+    )
+    status_expr = case(
+        (
+            or_(
+                func.trim(func.coalesce(act.action_status, "")) == "",
+                act.action_status.in_(["待处理", "待定"]),
+                func.lower(func.trim(func.coalesce(act.action_status, ""))) == "pending",
+            ),
+            literal("待定"),
+        ),
+        (
+            or_(
+                act.action_status.in_(["进行中", "讨论中"]),
+                func.lower(func.trim(func.coalesce(act.action_status, ""))) == "in progress",
+            ),
+            literal("进行中"),
+        ),
+        (
+            or_(
+                act.action_status.in_(["已完成", "已关闭"]),
+                func.lower(func.trim(func.coalesce(act.action_status, ""))).in_(["done", "completed"]),
+            ),
+            literal("已完成"),
+        ),
+        else_=literal("待定"),
+    )
     matched_category_codes: set[str] | None = None
     if category_primary and category_primary.strip():
         matched_category_codes = inventory_service.resolve_material_codes_for_categories(
@@ -205,13 +241,7 @@ def dashboard_overview(
                 func.coalesce(func.sum(cost_cny), 0).label("cny"),
                 func.count(snap.id).label("cnt"),
             )
-            .outerjoin(
-                act,
-                and_(
-                    act.snapshot_month == snap.snapshot_month,
-                    act.batch_no == snap.batch_no,
-                ),
-            )
+            .outerjoin(act, action_join_expr)
             .filter(snap.is_abnormal.is_(True))
         )
         .group_by(dept_name)
@@ -259,6 +289,111 @@ def dashboard_overview(
         for row in supplier_rows
     ]
 
+    # 执行状态分布（不良品）
+    status_rows = (
+        apply_context_filters(
+            db.query(
+                status_expr.label("name"),
+                func.coalesce(func.sum(snap.weight_kg), 0).label("kg"),
+                func.coalesce(func.sum(cost_cny), 0).label("cny"),
+                func.count(snap.id).label("cnt"),
+            )
+            .outerjoin(act, action_join_expr)
+            .filter(snap.is_abnormal.is_(True))
+        )
+        .group_by(status_expr)
+        .all()
+    )
+    status_map = {str(row.name or "").strip(): row for row in status_rows}
+    status_breakdown = [
+        _build_item(
+            name=status_name,
+            weight_kg=(status_map.get(status_name).kg if status_map.get(status_name) else 0),
+            amount_cny=(status_map.get(status_name).cny if status_map.get(status_name) else 0),
+            batch_count=(status_map.get(status_name).cnt if status_map.get(status_name) else 0),
+            base_weight_kg=abnormal_kg,
+        )
+        for status_name in STATUS_DISPLAY_ORDER
+    ]
+
+    pending_row = status_map.get("待定")
+    in_progress_row = status_map.get("进行中")
+    done_row = status_map.get("已完成")
+
+    pending_kg = float(pending_row.kg or 0) if pending_row else 0.0
+    pending_cny = float(pending_row.cny or 0) if pending_row else 0.0
+    pending_cnt = int(pending_row.cnt or 0) if pending_row else 0
+
+    in_progress_kg = float(in_progress_row.kg or 0) if in_progress_row else 0.0
+    in_progress_cny = float(in_progress_row.cny or 0) if in_progress_row else 0.0
+    in_progress_cnt = int(in_progress_row.cnt or 0) if in_progress_row else 0
+
+    done_kg = float(done_row.kg or 0) if done_row else 0.0
+    done_cny = float(done_row.cny or 0) if done_row else 0.0
+    done_cnt = int(done_row.cnt or 0) if done_row else 0
+
+    # Top 动作清单：优先看未分配 + 待定 + 超期 + 吨数大的批次
+    priority_rows = apply_context_filters(
+        db.query(
+            snap.batch_no.label("batch_no"),
+            snap.material_code.label("material_code"),
+            snap.material_name.label("material_name"),
+            snap.supplier_name.label("supplier_name"),
+            reason_expr.label("reason"),
+            func.coalesce(act.responsible_dept, "").label("responsible_dept"),
+            status_expr.label("action_status"),
+            func.coalesce(snap.weight_kg, 0).label("kg"),
+            func.coalesce(cost_cny, 0).label("cny"),
+        )
+        .outerjoin(act, action_join_expr)
+        .filter(snap.is_abnormal.is_(True))
+    ).all()
+
+    priority_candidates: list[dict[str, object]] = []
+    for row in priority_rows:
+        normalized_status = _normalize_status_label(row.action_status)
+        if normalized_status == "已完成":
+            continue
+        dept_text = str(row.responsible_dept or "").strip()
+        reason_text = str(row.reason or "质量不良").strip() or "质量不良"
+        weight_kg = float(row.kg or 0)
+        amount_cny = float(row.cny or 0)
+        priority_candidates.append(
+            {
+                "sort_key": (
+                    0 if not dept_text else 1,
+                    0 if normalized_status == "待定" else 1,
+                    0 if reason_text == "超期" else 1,
+                    -weight_kg,
+                    str(row.batch_no or ""),
+                ),
+                "batch_no": str(row.batch_no or ""),
+                "material_code": row.material_code,
+                "material_name": row.material_name,
+                "supplier_name": row.supplier_name,
+                "reason": reason_text,
+                "responsible_dept": dept_text or "未分配",
+                "action_status": normalized_status,
+                "weight_kg": weight_kg,
+                "amount_cny": amount_cny,
+            }
+        )
+    priority_candidates.sort(key=lambda x: x["sort_key"])
+    priority_actions = [
+        schemas.DashboardPriorityActionItem(
+            batch_no=str(item["batch_no"]),
+            material_code=str(item["material_code"] or "") or None,
+            material_name=str(item["material_name"] or "") or None,
+            supplier_name=str(item["supplier_name"] or "") or None,
+            reason=str(item["reason"]),
+            responsible_dept=str(item["responsible_dept"]),
+            action_status=str(item["action_status"]),
+            weight_tons=_to_tons(item["weight_kg"]),
+            amount_cny=_to_amount(item["amount_cny"]),
+        )
+        for item in priority_candidates[:TOP_PRIORITY_LIMIT]
+    ]
+
     return schemas.DashboardOverview(
         total_weight_tons=_to_tons(total_kg),
         total_amount_cny=_to_amount(total_cny),
@@ -270,8 +405,20 @@ def dashboard_overview(
         over_180_weight_tons=_to_tons(over_kg),
         over_180_amount_cny=_to_amount(over_cny),
         over_180_rate=_ratio(over_kg, normal_kg),
+        pending_weight_tons=_to_tons(pending_kg),
+        pending_amount_cny=_to_amount(pending_cny),
+        pending_batch_count=pending_cnt,
+        in_progress_weight_tons=_to_tons(in_progress_kg),
+        in_progress_amount_cny=_to_amount(in_progress_cny),
+        in_progress_batch_count=in_progress_cnt,
+        done_weight_tons=_to_tons(done_kg),
+        done_amount_cny=_to_amount(done_cny),
+        done_batch_count=done_cnt,
+        completion_rate=_ratio(done_kg, abnormal_kg),
         reason_breakdown=reason_breakdown,
         category_breakdown=category_breakdown,
         dept_breakdown=dept_breakdown,
         supplier_breakdown=supplier_breakdown,
+        status_breakdown=status_breakdown,
+        priority_actions=priority_actions,
     )

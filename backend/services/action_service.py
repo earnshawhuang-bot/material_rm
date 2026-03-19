@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from io import BytesIO
 from typing import Any
 
@@ -44,7 +44,11 @@ def _find_action_by_normalized_batch(
     return None
 
 
-def save_or_update_action(db, payload: schemas.ActionSaveRequest, updated_by: str) -> models.BatchAction:
+def save_or_update_action(
+    db: Session,
+    payload: schemas.ActionSaveRequest,
+    updated_by: str,
+) -> models.BatchAction:
     """Create or update one batch action record."""
     batch_no = normalize_batch_no(payload.batch_no)
     if not batch_no:
@@ -68,7 +72,7 @@ def save_or_update_action(db, payload: schemas.ActionSaveRequest, updated_by: st
     action.reason_note = payload.reason_note
     action.responsible_dept = payload.responsible_dept
     action.action_plan = payload.action_plan
-    action.action_status = payload.action_status
+    action.action_status = normalize_action_status(payload.action_status)
     action.remark = payload.remark
     action.claim_amount = payload.claim_amount
     action.claim_currency = payload.claim_currency
@@ -80,78 +84,81 @@ def save_or_update_action(db, payload: schemas.ActionSaveRequest, updated_by: st
     return action
 
 
-# ── 月度行动项自动继承 ──────────────────────────────────────
-
-
-def _get_previous_month(snapshot_month: str) -> str:
-    """'2026-03' → '2026-02', '2026-01' → '2025-12'."""
-    year, month = int(snapshot_month[:4]), int(snapshot_month[5:7])
-    if month == 1:
-        return f"{year - 1}-12"
-    return f"{year}-{month - 1:02d}"
-
-
 def carry_forward_actions(db: Session, new_month: str) -> dict:
-    """将上月的行动项继承到新月份（除"已关闭"外）。
+    """Carry forward latest historical action to the new month by batch number.
 
-    规则：
-    - 上月行动项状态为"已关闭" → 跳过
-    - 新月份中该 batch_no 不存在于快照 → 跳过
-    - 新月份中该 batch_no 已有行动项 → 跳过（补空不覆盖）
-    - 其余 → 复制到新月份
+    Rules:
+    - target scope: batches in current month SAP snapshot
+    - source scope: latest action in historical months (snapshot_month < new_month)
+    - matching key: normalized batch number
+    - keep current month action if it already exists (fill-empty, never overwrite)
     """
-    prev_month = _get_previous_month(new_month)
-
-    # 获取上月所有行动项
-    prev_actions = (
-        db.query(models.BatchAction)
-        .filter(models.BatchAction.snapshot_month == prev_month)
-        .all()
-    )
-
-    if not prev_actions:
-        return {"carried": 0, "skipped_closed": 0, "skipped_existing": 0, "skipped_no_snapshot": 0}
-
-    # 获取新月份快照中所有 batch_no
-    new_batches = set(
+    new_batches = {
         normalize_batch_no(row[0])
         for row in db.query(models.InventorySnapshot.batch_no)
         .filter(models.InventorySnapshot.snapshot_month == new_month)
         .all()
         if normalize_batch_no(row[0])
-    )
+    }
+    if not new_batches:
+        return {
+            "candidate_batches": 0,
+            "carried": 0,
+            "history_matched": 0,
+            "skipped_existing": 0,
+            "skipped_no_history": 0,
+        }
 
-    # 获取新月份已有的行动项 batch_no
-    existing_actions = set(
+    existing_actions = {
         normalize_batch_no(row[0])
         for row in db.query(models.BatchAction.batch_no)
         .filter(models.BatchAction.snapshot_month == new_month)
         .all()
         if normalize_batch_no(row[0])
+    }
+    pending_batches = new_batches - existing_actions
+    if not pending_batches:
+        return {
+            "candidate_batches": len(new_batches),
+            "carried": 0,
+            "history_matched": 0,
+            "skipped_existing": len(existing_actions & new_batches),
+            "skipped_no_history": 0,
+        }
+
+    # Newest-first ordering makes first hit per normalized batch the effective "latest".
+    history_actions = (
+        db.query(models.BatchAction)
+        .filter(models.BatchAction.snapshot_month < new_month)
+        .order_by(
+            models.BatchAction.snapshot_month.desc(),
+            models.BatchAction.updated_at.desc(),
+            models.BatchAction.id.desc(),
+        )
+        .all()
     )
 
-    stats = {"carried": 0, "skipped_closed": 0, "skipped_existing": 0, "skipped_no_snapshot": 0}
-
-    for act in prev_actions:
-        if act.action_status == "已关闭":
-            stats["skipped_closed"] += 1
-            continue
+    latest_by_batch: dict[str, models.BatchAction] = {}
+    for act in history_actions:
         normalized_batch = normalize_batch_no(act.batch_no)
-        if normalized_batch not in new_batches:
-            stats["skipped_no_snapshot"] += 1
+        if not normalized_batch or normalized_batch not in pending_batches:
             continue
-        if normalized_batch in existing_actions:
-            stats["skipped_existing"] += 1
+        if normalized_batch in latest_by_batch:
             continue
+        latest_by_batch[normalized_batch] = act
+        if len(latest_by_batch) >= len(pending_batches):
+            break
 
+    carried = 0
+    for batch_no, act in latest_by_batch.items():
         db.add(
             models.BatchAction(
                 snapshot_month=new_month,
-                batch_no=normalized_batch,
+                batch_no=batch_no,
                 reason_note=act.reason_note,
                 responsible_dept=act.responsible_dept,
                 action_plan=act.action_plan,
-                action_status=act.action_status,
+                action_status=normalize_action_status(act.action_status),
                 remark=act.remark,
                 claim_amount=act.claim_amount,
                 claim_currency=act.claim_currency,
@@ -159,44 +166,53 @@ def carry_forward_actions(db: Session, new_month: str) -> dict:
                 updated_by="system:carry-forward",
             )
         )
-        stats["carried"] += 1
+        carried += 1
 
     db.flush()
-    return stats
+    return {
+        "candidate_batches": len(new_batches),
+        "carried": carried,
+        "history_matched": len(latest_by_batch),
+        "skipped_existing": len(existing_actions & new_batches),
+        "skipped_no_history": len(pending_batches) - len(latest_by_batch),
+    }
 
 
-# ── 线下 Excel 处理记录一次性导入 ──────────────────────────
-
-
-# 处理状态关键词 → 标准值映射
 _STATUS_KEYWORDS: list[tuple[str, str]] = [
-    ("已关闭", "已关闭"),
     ("已完成", "已完成"),
+    ("已关闭", "已完成"),
     ("进行中", "进行中"),
-    ("讨论中", "讨论中"),
+    ("讨论中", "进行中"),
     ("待定", "待定"),
-    ("待处理", "待处理"),
+    ("待处理", "待定"),
+    ("待办", "待定"),
+    ("completed", "已完成"),
+    ("done", "已完成"),
+    ("in progress", "进行中"),
+    ("pending", "待定"),
 ]
 
 
 def _map_status(raw: str | None) -> tuple[str, str | None]:
-    """将原始处理状态文本映射为标准枚举值。
-
-    返回 (mapped_status, extra_note)：
-    - 若匹配到标准值：(标准值, None)
-    - 若不匹配：("待处理", "原始状态: xxx")
-    """
+    """Map raw status text into standardized status."""
     if not raw or not str(raw).strip():
-        return "待处理", None
+        return "待定", None
     text = str(raw).strip()
+    lower_text = text.lower()
     for keyword, std_val in _STATUS_KEYWORDS:
-        if keyword in text:
+        if keyword.lower() in lower_text:
             return std_val, None
-    return "待处理", f"原始状态: {text}"
+    return "待定", f"原始状态: {text}"
+
+
+def normalize_action_status(raw: str | None) -> str:
+    """Normalize any status text into the 3-state canonical set."""
+    mapped, _ = _map_status(raw)
+    return mapped
 
 
 def _parse_claim_amount(raw: Any) -> float | None:
-    """解析索赔金额，失败返回 None。"""
+    """Parse claim amount, return None when invalid or empty."""
     if raw is None:
         return None
     try:
@@ -212,12 +228,12 @@ def _parse_claim_amount(raw: Any) -> float | None:
 
 
 def _parse_expected_date(raw: Any) -> tuple[date | None, str | None]:
-    """解析预计完成时间。
+    """Parse expected completion date.
 
-    返回 (parsed_date, extra_note)：
-    - 合法日期（含 Excel 序列号）→ (date, None)
-    - 非日期文本（Pending / 3月底前）→ (None, "预计完成: xxx")
-    - 空 → (None, None)
+    Returns:
+    - (date, None): valid date
+    - (None, note): unparseable non-empty text
+    - (None, None): empty
     """
     if raw is None:
         return None, None
@@ -227,7 +243,7 @@ def _parse_expected_date(raw: Any) -> tuple[date | None, str | None]:
     except (TypeError, ValueError):
         pass
 
-    # Excel 数字序列号（如 46096）
+    # Excel serial date.
     if isinstance(raw, (int, float)):
         try:
             parsed = pd.to_datetime(raw, unit="D", origin="1899-12-30", errors="coerce")
@@ -236,7 +252,6 @@ def _parse_expected_date(raw: Any) -> tuple[date | None, str | None]:
         except Exception:
             pass
 
-    # 尝试标准日期解析
     try:
         parsed = pd.to_datetime(raw, errors="coerce")
         if pd.notna(parsed):
@@ -244,15 +259,14 @@ def _parse_expected_date(raw: Any) -> tuple[date | None, str | None]:
     except Exception:
         pass
 
-    # 非日期文本
     text = str(raw).strip()
-    if text and text.lower() not in ("nan", "none", "nat"):
+    if text and text.lower() not in {"nan", "none", "nat"}:
         return None, f"预计完成: {text}"
     return None, None
 
 
 def _safe_str(val: Any) -> str | None:
-    """安全转换为字符串，NaN/None → None。"""
+    """Convert any cell value to clean string, NaN-like values become None."""
     if val is None:
         return None
     try:
@@ -261,7 +275,7 @@ def _safe_str(val: Any) -> str | None:
     except (TypeError, ValueError):
         pass
     s = str(val).strip()
-    if not s or s.lower() in ("nan", "none"):
+    if not s or s.lower() in {"nan", "none"}:
         return None
     return s
 
@@ -274,8 +288,12 @@ def _merge_action_fill_blanks(target: models.BatchAction, source: models.BatchAc
         target.responsible_dept = source.responsible_dept
     if not target.action_plan and source.action_plan:
         target.action_plan = source.action_plan
-    if (not target.action_status or target.action_status == "待处理") and source.action_status:
-        target.action_status = source.action_status
+    target_status = normalize_action_status(target.action_status)
+    source_status = normalize_action_status(source.action_status)
+    if not target.action_status or target_status == "待定":
+        target.action_status = source_status
+    else:
+        target.action_status = target_status
     if not target.remark and source.remark:
         target.remark = source.remark
     if target.claim_amount is None and source.claim_amount is not None:
@@ -327,26 +345,17 @@ def import_actions_from_excel(
     snapshot_month: str,
     uploaded_by: str,
 ) -> schemas.ActionImportResponse:
-    """从线下 Excel 导入处理记录。
-
-    规则：
-    - 按"批次编号"列匹配快照中 quality_flag='N' 的批次
-    - 责任部门 / 处理方案：直接导入（自由文本）
-    - 处理状态：关键词映射，不匹配→"待处理"，原文存备注
-    - 索赔金额：解析为数字，失败留空
-    - 预计完成时间：解析日期，非日期文本存备注
-    - 已存在的行动项：仅补空不覆盖
-    """
+    """Import offline action records and match abnormal batches by batch number."""
     raw = file.file.read()
     rows = _read_action_excel_rows(raw)
+    if not rows:
+        return schemas.ActionImportResponse(matched=0, skipped=0, errors=0, error_details=[])
+
     df = pd.DataFrame(rows)
-
-    # 必须有 "批次编号" 列
     if "批次编号" not in df.columns:
-        raise ValueError("Excel 缺少'批次编号'列")
+        raise ValueError("Excel 缺少“批次编号”列")
 
-    # 获取该月份所有 quality_flag='N' 的批次
-    abnormal_batches = set(
+    abnormal_batches = {
         normalize_batch_no(row[0])
         for row in db.query(models.InventorySnapshot.batch_no)
         .filter(
@@ -355,9 +364,9 @@ def import_actions_from_excel(
         )
         .all()
         if normalize_batch_no(row[0])
-    )
+    }
 
-    # 获取该月份已有的行动项
+    # Existing actions of target month: normalize keys and merge duplicates first.
     existing_actions: dict[str, models.BatchAction] = {}
     existing_rows = (
         db.query(models.BatchAction)
@@ -380,41 +389,34 @@ def import_actions_from_excel(
             db.delete(duplicate)
         if primary.batch_no != key:
             primary.batch_no = key
+        primary.action_status = normalize_action_status(primary.action_status)
         existing_actions[key] = primary
 
     stats = schemas.ActionImportResponse(matched=0, skipped=0, errors=0, error_details=[])
 
     for idx, row in df.iterrows():
-        row_num = idx + 2  # Excel 行号（标题行是第1行）
+        row_num = idx + 2  # Header is row 1.
         try:
             batch_no = normalize_batch_no(row.get("批次编号"))
             if not batch_no:
-                continue  # 无批次号的行直接跳过
+                continue
 
-            # 仅导入 quality_flag='N' 的批次
             if batch_no not in abnormal_batches:
                 stats.skipped += 1
                 continue
 
-            # 解析各字段
             dept = _safe_str(row.get("责任部门"))
             if dept:
-                dept = dept.replace("\\", "/")  # 修正 "质量\研发" → "质量/研发"
-
+                dept = dept.replace("\\", "/")
             plan = _safe_str(row.get("处理方案"))
-
             raw_status = _safe_str(row.get("处理状态"))
             mapped_status, status_note = _map_status(raw_status)
-
             claim = _parse_claim_amount(row.get("索赔金额"))
             claim_cur = _safe_str(row.get("币种"))
-
             exp_date, date_note = _parse_expected_date(row.get("预计完成时间"))
-
-            reason_note = _safe_str(row.get("线下原因补充说明"))
+            reason_note = _safe_str(row.get("线下呆滞原因描述") or row.get("线下原因说明"))
             remark_raw = _safe_str(row.get("备注"))
 
-            # 聚合备注：原始备注 + 非标状态 + 非日期文本
             remark_parts = []
             if remark_raw:
                 remark_parts.append(remark_raw)
@@ -424,15 +426,16 @@ def import_actions_from_excel(
                 remark_parts.append(date_note)
             remark = "; ".join(remark_parts) if remark_parts else None
 
-            # 补空不覆盖逻辑
             if batch_no in existing_actions:
                 act = existing_actions[batch_no]
                 if not act.responsible_dept and dept:
                     act.responsible_dept = dept
                 if not act.action_plan and plan:
                     act.action_plan = plan
-                if not act.action_status or act.action_status == "待处理":
+                if not act.action_status or normalize_action_status(act.action_status) == "待定":
                     act.action_status = mapped_status
+                else:
+                    act.action_status = normalize_action_status(act.action_status)
                 if not act.reason_note and reason_note:
                     act.reason_note = reason_note
                 if act.claim_amount is None and claim is not None:
@@ -462,12 +465,11 @@ def import_actions_from_excel(
                 existing_actions[batch_no] = new_act
 
             stats.matched += 1
-
         except Exception as exc:
             stats.errors += 1
             stats.error_details.append(f"第{row_num}行: {exc}")
             if len(stats.error_details) > 50:
-                stats.error_details.append("...更多错误已省略")
+                stats.error_details.append("更多错误已省略")
                 break
 
     db.flush()
