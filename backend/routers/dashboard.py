@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import and_, case, func, literal, or_
 from sqlalchemy.orm import Session
@@ -70,6 +72,33 @@ def _build_item(
 
 def _normalize_status_label(raw_status: str | None) -> str:
     return normalize_action_status(raw_status)
+
+
+def _normalize_dept_label(raw_dept: str | None) -> str:
+    text = str(raw_dept or "").strip()
+    if not text:
+        return "未分配"
+
+    parts = [part.strip() for part in re.split(r"[/、,，;；]+", text) if part and part.strip()]
+    if not parts:
+        return "未分配"
+
+    alias_map = {
+        "品质": "质量",
+        "品保": "质量",
+        "研发部": "研发",
+        "质量部": "质量",
+    }
+
+    normalized_parts: list[str] = []
+    for part in parts:
+        normalized = alias_map.get(part, part)
+        if normalized.endswith("部") and len(normalized) > 1:
+            normalized = normalized[:-1]
+        normalized_parts.append(normalized)
+
+    unique_sorted = sorted(set(normalized_parts))
+    return "/".join(unique_sorted) if unique_sorted else "未分配"
 
 
 @router.get("/overview", response_model=schemas.DashboardOverview)
@@ -175,6 +204,18 @@ def dashboard_overview(
     over_kg = float(over180.over_kg or 0)
     over_cny = float(over180.over_cny or 0)
 
+    abnormal_over_90 = apply_context_filters(
+        db.query(
+            func.coalesce(func.sum(snap.weight_kg), 0).label("over_kg"),
+            func.coalesce(func.sum(cost_cny), 0).label("over_cny"),
+        ).filter(
+            snap.is_abnormal.is_(True),
+            snap.aging_category.in_(["C", "D", "E"]),
+        )
+    ).one()
+    abnormal_over_90_kg = float(abnormal_over_90.over_kg or 0)
+    abnormal_over_90_cny = float(abnormal_over_90.over_cny or 0)
+
     # Risk Composition - 不良原因（仅两类）
     reason_rows = (
         apply_context_filters(
@@ -248,15 +289,30 @@ def dashboard_overview(
         .order_by(func.sum(snap.weight_kg).desc())
         .all()
     )
+    merged_dept: dict[str, dict[str, float | int]] = {}
+    for row in dept_rows:
+        key = _normalize_dept_label(row.name)
+        item = merged_dept.setdefault(
+            key,
+            {"kg": 0.0, "cny": 0.0, "cnt": 0},
+        )
+        item["kg"] = float(item["kg"]) + float(row.kg or 0)
+        item["cny"] = float(item["cny"]) + float(row.cny or 0)
+        item["cnt"] = int(item["cnt"]) + int(row.cnt or 0)
+    merged_dept_rows = sorted(
+        merged_dept.items(),
+        key=lambda kv: float(kv[1]["kg"]),
+        reverse=True,
+    )
     dept_breakdown = [
         _build_item(
-            name=row.name or "未分配",
-            weight_kg=row.kg,
-            amount_cny=row.cny,
-            batch_count=row.cnt,
+            name=dept_name_text,
+            weight_kg=agg_map["kg"],
+            amount_cny=agg_map["cny"],
+            batch_count=agg_map["cnt"],
             base_weight_kg=abnormal_kg,
         )
-        for row in dept_rows
+        for dept_name_text, agg_map in merged_dept_rows
     ]
 
     # 供应商风险分布（不良品 Top）
@@ -402,6 +458,9 @@ def dashboard_overview(
         abnormal_weight_tons=_to_tons(abnormal_kg),
         abnormal_amount_cny=_to_amount(abnormal_cny),
         abnormal_rate=_ratio(abnormal_kg, total_kg),
+        abnormal_over_90_weight_tons=_to_tons(abnormal_over_90_kg),
+        abnormal_over_90_amount_cny=_to_amount(abnormal_over_90_cny),
+        abnormal_over_90_rate=_ratio(abnormal_over_90_kg, abnormal_kg),
         over_180_weight_tons=_to_tons(over_kg),
         over_180_amount_cny=_to_amount(over_cny),
         over_180_rate=_ratio(over_kg, normal_kg),

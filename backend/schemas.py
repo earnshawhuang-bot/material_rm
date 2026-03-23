@@ -279,6 +279,9 @@ class DashboardOverview(BaseModel):
     abnormal_weight_tons: int
     abnormal_amount_cny: float
     abnormal_rate: int
+    abnormal_over_90_weight_tons: int
+    abnormal_over_90_amount_cny: float
+    abnormal_over_90_rate: int
     over_180_weight_tons: int
     over_180_amount_cny: float
     over_180_rate: int
