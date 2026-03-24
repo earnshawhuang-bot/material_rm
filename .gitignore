@@ -1,5 +1,6 @@
 /.venv/
 /backend/rm_inventory_demo.db
+/backend/.env
 /.cursor/
 /.codex/
 .claude/
