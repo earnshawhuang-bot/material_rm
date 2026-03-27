@@ -386,7 +386,7 @@
                     <div class="mb-2 flex items-center justify-between gap-2">
                         <h3 class="text-sm font-bold text-slate-700">供应商风险分布(不良品 Top 8)</h3>
                         <span id="ch-supplier-coverage" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700">
-                            Top8覆盖 0%
+                            Top8覆盖 0% · 0t/0t
                         </span>
                     </div>
                     <div id="ch-supplier" class="chart-box"></div>
@@ -1710,7 +1710,7 @@ function renderDashCharts(d, categoryItems) {
     const supplierTopTons = supplierItems.reduce((sum, row) => sum + Number(row.weight_tons || 0), 0);
     const abnormalTons = Number(d.abnormal_weight_tons || 0);
     const supplierCoverage = abnormalTons > 0 ? Math.round(supplierTopTons / abnormalTons * 100) : 0;
-    $("ch-supplier-coverage").textContent = `Top8覆盖 ${supplierCoverage}%`;
+    $("ch-supplier-coverage").textContent = `Top8覆盖 ${supplierCoverage}% · ${_fmtInt(supplierTopTons)}t/${_fmtInt(abnormalTons)}t`;
 
     renderDashReasonDonut(d.reason_breakdown || []);
     renderDashBar({
