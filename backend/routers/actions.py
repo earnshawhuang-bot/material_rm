@@ -50,7 +50,7 @@ def list_pending(snapshot_month: str, department: str | None = None, db: Session
         )
         .filter(
             models.InventorySnapshot.snapshot_month == snapshot_month,
-            models.InventorySnapshot.is_abnormal.is_(True),
+            models.InventorySnapshot.is_abnormal == True,
         )
         .filter(
             or_(

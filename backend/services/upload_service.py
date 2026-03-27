@@ -267,9 +267,10 @@ def parse_and_save_sap_upload(
         if is_abnormal:
             abnormal_count += 1
         mapped = mapping_map.get(normalize_material_code(row["material_code"]))
-        if mapped is not None:
-            work_df.loc[row.name, "rm_family"] = mapped.family
-            work_df.loc[row.name, "category_primary"] = mapped.category_primary
+        # NOTE: `row` from iterrows() is a row snapshot; writing back to work_df
+        # here does not guarantee the current `row` view will see updates.
+        mapped_family = mapped.family if mapped is not None else None
+        mapped_primary = mapped.category_primary if mapped is not None else None
 
         snapshot = models.InventorySnapshot(
             snapshot_month=_normalize_value(row["snapshot_month"]),
@@ -312,8 +313,8 @@ def parse_and_save_sap_upload(
             in_transit=_to_int(row["in_transit"]) or 0,
             currency=_normalize_value(row["currency"]),
             rm_category=rm_type,
-            rm_family=_normalize_value(row.get("rm_family")),
-            category_primary=_normalize_value(row.get("category_primary")),
+            rm_family=_normalize_value(mapped_family),
+            category_primary=_normalize_value(mapped_primary),
             is_abnormal=is_abnormal,
             abnormal_reasons=reasons,
         )

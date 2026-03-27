@@ -173,12 +173,12 @@ def dashboard_overview(
         db.query(
             func.coalesce(func.sum(snap.weight_kg), 0).label("total_kg"),
             func.coalesce(
-                func.sum(case((snap.is_abnormal.is_(True), snap.weight_kg), else_=0)),
+                func.sum(case((snap.is_abnormal == True, snap.weight_kg), else_=0)),
                 0,
             ).label("abnormal_kg"),
             func.coalesce(func.sum(cost_cny), 0).label("total_cny"),
             func.coalesce(
-                func.sum(case((snap.is_abnormal.is_(True), cost_cny), else_=0)),
+                func.sum(case((snap.is_abnormal == True, cost_cny), else_=0)),
                 0,
             ).label("abnormal_cny"),
         )
@@ -197,7 +197,7 @@ def dashboard_overview(
             func.coalesce(func.sum(snap.weight_kg), 0).label("over_kg"),
             func.coalesce(func.sum(cost_cny), 0).label("over_cny"),
         ).filter(
-            snap.is_abnormal.is_(False),
+            snap.is_abnormal == False,
             snap.aging_category.in_(["D", "E"]),
         )
     ).one()
@@ -209,7 +209,7 @@ def dashboard_overview(
             func.coalesce(func.sum(snap.weight_kg), 0).label("over_kg"),
             func.coalesce(func.sum(cost_cny), 0).label("over_cny"),
         ).filter(
-            snap.is_abnormal.is_(True),
+            snap.is_abnormal == True,
             snap.aging_category.in_(["C", "D", "E"]),
         )
     ).one()
@@ -224,9 +224,9 @@ def dashboard_overview(
                 func.coalesce(func.sum(snap.weight_kg), 0).label("kg"),
                 func.coalesce(func.sum(cost_cny), 0).label("cny"),
                 func.count(snap.id).label("cnt"),
-            ).filter(snap.is_abnormal.is_(True))
+            ).filter(snap.is_abnormal == True)
         )
-        .group_by(reason_expr)
+        .group_by(snap.obsolete_reason_desc)
         .all()
     )
     reason_map = {row.name: row for row in reason_rows}
@@ -255,7 +255,7 @@ def dashboard_overview(
                 func.coalesce(func.sum(snap.weight_kg), 0).label("kg"),
                 func.coalesce(func.sum(cost_cny), 0).label("cny"),
                 func.count(snap.id).label("cnt"),
-            ).filter(snap.is_abnormal.is_(True))
+            ).filter(snap.is_abnormal == True)
         )
         .group_by(snap.category_primary)
         .order_by(func.sum(snap.weight_kg).desc())
@@ -273,7 +273,7 @@ def dashboard_overview(
     ]
 
     # 责任部门分布（不良品）
-    dept_name = func.coalesce(act.responsible_dept, "未分配")
+    dept_name = act.responsible_dept
     dept_rows = (
         apply_context_filters(
             db.query(
@@ -283,9 +283,9 @@ def dashboard_overview(
                 func.count(snap.id).label("cnt"),
             )
             .outerjoin(act, action_join_expr)
-            .filter(snap.is_abnormal.is_(True))
+            .filter(snap.is_abnormal == True)
         )
-        .group_by(dept_name)
+        .group_by(act.responsible_dept)
         .order_by(func.sum(snap.weight_kg).desc())
         .all()
     )
@@ -324,7 +324,7 @@ def dashboard_overview(
                 func.coalesce(func.sum(cost_cny), 0).label("cny"),
                 func.count(snap.id).label("cnt"),
             ).filter(
-                snap.is_abnormal.is_(True),
+                snap.is_abnormal == True,
                 snap.supplier_name.isnot(None),
                 snap.supplier_name != "",
             )
@@ -349,44 +349,50 @@ def dashboard_overview(
     status_rows = (
         apply_context_filters(
             db.query(
-                status_expr.label("name"),
+                act.action_status.label("name"),
                 func.coalesce(func.sum(snap.weight_kg), 0).label("kg"),
                 func.coalesce(func.sum(cost_cny), 0).label("cny"),
                 func.count(snap.id).label("cnt"),
             )
             .outerjoin(act, action_join_expr)
-            .filter(snap.is_abnormal.is_(True))
+            .filter(snap.is_abnormal == True)
         )
-        .group_by(status_expr)
+        .group_by(act.action_status)
         .all()
     )
-    status_map = {str(row.name or "").strip(): row for row in status_rows}
+    status_map: dict[str, dict[str, float | int]] = {}
+    for row in status_rows:
+        key = _normalize_status_label(row.name)
+        item = status_map.setdefault(key, {"kg": 0.0, "cny": 0.0, "cnt": 0})
+        item["kg"] = float(item["kg"]) + float(row.kg or 0)
+        item["cny"] = float(item["cny"]) + float(row.cny or 0)
+        item["cnt"] = int(item["cnt"]) + int(row.cnt or 0)
     status_breakdown = [
         _build_item(
             name=status_name,
-            weight_kg=(status_map.get(status_name).kg if status_map.get(status_name) else 0),
-            amount_cny=(status_map.get(status_name).cny if status_map.get(status_name) else 0),
-            batch_count=(status_map.get(status_name).cnt if status_map.get(status_name) else 0),
+            weight_kg=status_map.get(status_name, {}).get("kg", 0),
+            amount_cny=status_map.get(status_name, {}).get("cny", 0),
+            batch_count=status_map.get(status_name, {}).get("cnt", 0),
             base_weight_kg=abnormal_kg,
         )
         for status_name in STATUS_DISPLAY_ORDER
     ]
 
-    pending_row = status_map.get("待定")
-    in_progress_row = status_map.get("进行中")
-    done_row = status_map.get("已完成")
+    pending = status_map.get("待定", {})
+    in_progress = status_map.get("进行中", {})
+    done = status_map.get("已完成", {})
 
-    pending_kg = float(pending_row.kg or 0) if pending_row else 0.0
-    pending_cny = float(pending_row.cny or 0) if pending_row else 0.0
-    pending_cnt = int(pending_row.cnt or 0) if pending_row else 0
+    pending_kg = float(pending.get("kg", 0) or 0)
+    pending_cny = float(pending.get("cny", 0) or 0)
+    pending_cnt = int(pending.get("cnt", 0) or 0)
 
-    in_progress_kg = float(in_progress_row.kg or 0) if in_progress_row else 0.0
-    in_progress_cny = float(in_progress_row.cny or 0) if in_progress_row else 0.0
-    in_progress_cnt = int(in_progress_row.cnt or 0) if in_progress_row else 0
+    in_progress_kg = float(in_progress.get("kg", 0) or 0)
+    in_progress_cny = float(in_progress.get("cny", 0) or 0)
+    in_progress_cnt = int(in_progress.get("cnt", 0) or 0)
 
-    done_kg = float(done_row.kg or 0) if done_row else 0.0
-    done_cny = float(done_row.cny or 0) if done_row else 0.0
-    done_cnt = int(done_row.cnt or 0) if done_row else 0
+    done_kg = float(done.get("kg", 0) or 0)
+    done_cny = float(done.get("cny", 0) or 0)
+    done_cnt = int(done.get("cnt", 0) or 0)
 
     # Top 动作清单：优先看未分配 + 待定 + 超期 + 吨数大的批次
     priority_rows = apply_context_filters(
@@ -402,7 +408,7 @@ def dashboard_overview(
             func.coalesce(cost_cny, 0).label("cny"),
         )
         .outerjoin(act, action_join_expr)
-        .filter(snap.is_abnormal.is_(True))
+        .filter(snap.is_abnormal == True)
     ).all()
 
     priority_candidates: list[dict[str, object]] = []

@@ -20,7 +20,7 @@ def list_enum(enum_type: str, db: Session = Depends(get_db)):
         db.query(models.SysEnumConfig)
         .filter(
             models.SysEnumConfig.enum_type == enum_type,
-            models.SysEnumConfig.is_active.is_(True),
+            models.SysEnumConfig.is_active == True,
         )
         .all()
     )
