@@ -269,22 +269,15 @@
             <form id="login-form" class="space-y-5">
                 <div>
                     <label class="block text-slate-400 text-xs font-medium mb-2">用户名</label>
-                    <input id="login-user" type="text" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-indigo-500 transition-colors" placeholder="请输入用户名" value="admin">
+                    <input id="login-user" type="text" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-indigo-500 transition-colors" placeholder="请输入用户名" autocomplete="username">
                 </div>
                 <div>
                     <label class="block text-slate-400 text-xs font-medium mb-2">密码</label>
-                    <input id="login-pwd" type="password" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-indigo-500 transition-colors" placeholder="请输入密码" value="123456">
+                    <input id="login-pwd" type="password" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-indigo-500 transition-colors" placeholder="请输入密码" autocomplete="current-password">
                 </div>
                 <button type="submit" class="w-full bg-gradient-to-r from-indigo-500 to-blue-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-indigo-500/25 hover:opacity-90 transition-opacity">登 录</button>
             </form>
             <p id="login-tip" class="text-red-400 text-xs mt-4 text-center min-h-[1rem]"></p>
-            <div class="mt-8 p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/10">
-                <p class="text-indigo-300 text-[11px] leading-relaxed">
-                    <span class="font-bold">演示账号:</span><br>
-                    管理员: admin / 123456<br>
-                    业务员: user / 123456
-                </p>
-            </div>
         </div>
     </div>
 
@@ -362,7 +355,7 @@
                 <div class="kpi-card">
                     <p class="kpi-title">不良90天以上库存</p>
                     <p id="kpi-abnormal90-tons" class="kpi-value text-rose-600">0</p>
-                    <p id="kpi-abnormal90-rate" class="kpi-sub">占不良库存 0% · 金额 ¥0</p>
+                        <p id="kpi-abnormal90-rate" class="kpi-sub">占不良库存 0% · 占总库存 0% · 金额 ¥0</p>
                 </div>
                 <div class="kpi-card">
                     <p class="kpi-title">180天以上库存(正常)</p>
@@ -1540,7 +1533,10 @@ function renderDashKPIs(d) {
     $("kpi-normal-tons").textContent = `正常库存 ${_fmtTon(d.normal_weight_tons)}`;
 
     $("kpi-abnormal90-tons").textContent = `${_fmtInt(d.abnormal_over_90_weight_tons)} t`;
-    $("kpi-abnormal90-rate").textContent = `占不良库存 ${_fmtPct(d.abnormal_over_90_rate)} · 金额 ${_fmtAmt(d.abnormal_over_90_amount_cny)}`;
+    const abnormal90TotalRate = Number(d.total_weight_tons || 0) > 0
+        ? Math.round(Number(d.abnormal_over_90_weight_tons || 0) / Number(d.total_weight_tons || 0) * 100)
+        : 0;
+    $("kpi-abnormal90-rate").textContent = `占不良库存 ${_fmtPct(d.abnormal_over_90_rate)} · 占总库存 ${_fmtPct(abnormal90TotalRate)} · 金额 ${_fmtAmt(d.abnormal_over_90_amount_cny)}`;
 
     $("kpi-over180-tons").textContent = `${_fmtInt(d.over_180_weight_tons)} t`;
     $("kpi-over180-rate").textContent = `占正常库存 ${_fmtPct(d.over_180_rate)} · 金额 ${_fmtAmt(d.over_180_amount_cny)}`;
