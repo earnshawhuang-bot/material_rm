@@ -229,20 +229,29 @@ def dashboard_overview(
         .group_by(snap.obsolete_reason_desc)
         .all()
     )
-    reason_map = {row.name: row for row in reason_rows}
+    reason_map: dict[str, dict[str, float | int]] = {
+        "超期": {"kg": 0.0, "cny": 0.0, "cnt": 0},
+        "质量不良": {"kg": 0.0, "cny": 0.0, "cnt": 0},
+    }
+    for row in reason_rows:
+        key = "超期" if str(row.name or "").strip() == "超期" else "质量不良"
+        item = reason_map[key]
+        item["kg"] = float(item["kg"]) + float(row.kg or 0)
+        item["cny"] = float(item["cny"]) + float(row.cny or 0)
+        item["cnt"] = int(item["cnt"]) + int(row.cnt or 0)
     reason_breakdown = [
         _build_item(
             name="超期",
-            weight_kg=(reason_map.get("超期").kg if reason_map.get("超期") else 0),
-            amount_cny=(reason_map.get("超期").cny if reason_map.get("超期") else 0),
-            batch_count=(reason_map.get("超期").cnt if reason_map.get("超期") else 0),
+            weight_kg=reason_map["超期"]["kg"],
+            amount_cny=reason_map["超期"]["cny"],
+            batch_count=reason_map["超期"]["cnt"],
             base_weight_kg=abnormal_kg,
         ),
         _build_item(
             name="质量不良",
-            weight_kg=(reason_map.get("质量不良").kg if reason_map.get("质量不良") else 0),
-            amount_cny=(reason_map.get("质量不良").cny if reason_map.get("质量不良") else 0),
-            batch_count=(reason_map.get("质量不良").cnt if reason_map.get("质量不良") else 0),
+            weight_kg=reason_map["质量不良"]["kg"],
+            amount_cny=reason_map["质量不良"]["cny"],
+            batch_count=reason_map["质量不良"]["cnt"],
             base_weight_kg=abnormal_kg,
         ),
     ]
