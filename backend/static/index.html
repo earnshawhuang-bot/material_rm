@@ -513,6 +513,18 @@
                         </div>
                     </div>
 
+                    <div class="h-8 w-[1px] bg-slate-100"></div>
+
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold text-slate-500">新增批次</span>
+                        <div class="filter-dropdown">
+                            <button id="new-batch-btn" type="button" class="filter-trigger" title="全部">全部</button>
+                            <div id="new-batch-panel" class="filter-panel hidden">
+                                <div id="new-batch-options"></div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="flex-1 min-w-[240px] relative">
                         <div class="absolute inset-y-0 left-3 flex items-center pointer-events-none">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
@@ -558,6 +570,7 @@
                             <col style="width: 100px"> <!-- 责任部门 -->
                             <col style="width: 100px"> <!-- 处理方案 -->
                             <col style="width: 90px">  <!-- 处理状态 -->
+                            <col style="width: 90px">  <!-- 索赔吨数 -->
                             <col style="width: 80px">  <!-- 索赔金额 -->
                             <col style="width: 60px">  <!-- 币种 -->
                             <col style="width: 100px"> <!-- 预计完成 -->
@@ -591,15 +604,16 @@
                                 <th class="action-col" data-col="22">责任部门<div class="resizer"></div></th>
                                 <th class="action-col" data-col="23">处理方案<div class="resizer"></div></th>
                                 <th class="action-col" data-col="24">处理状态<div class="resizer"></div></th>
-                                <th class="action-col" data-col="25">索赔金额<div class="resizer"></div></th>
-                                <th class="action-col" data-col="26">币种<div class="resizer"></div></th>
-                                <th class="action-col" data-col="27">预计完成<div class="resizer"></div></th>
-                                <th class="action-col" data-col="28">备注<div class="resizer"></div></th>
-                                <th class="action-col" data-col="29">操作<div class="resizer"></div></th>
+                                <th class="action-col" data-col="25">索赔吨数<div class="resizer"></div></th>
+                                <th class="action-col" data-col="26">索赔金额<div class="resizer"></div></th>
+                                <th class="action-col" data-col="27">币种<div class="resizer"></div></th>
+                                <th class="action-col" data-col="28">预计完成<div class="resizer"></div></th>
+                                <th class="action-col" data-col="29">备注<div class="resizer"></div></th>
+                                <th class="action-col" data-col="30">操作<div class="resizer"></div></th>
                             </tr>
                         </thead>
                         <tbody id="table-body">
-                            <tr><td colspan="30" class="text-center py-20 text-slate-400">请选择月份后点击查询</td></tr>
+                            <tr><td colspan="31" class="text-center py-20 text-slate-400">请选择月份后点击查询</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -826,6 +840,7 @@ const state = {
         rmType: [],
         aging: [],
         actionStatus: [],
+        newBatch: [],
     },
     inventoryFilterOptions: {
         rmType: [],
@@ -841,6 +856,10 @@ const state = {
             { value: "进行中", label: "进行中" },
             { value: "已完成", label: "已完成" },
         ],
+        newBatch: [
+            { value: "true", label: "仅新增" },
+            { value: "false", label: "非新增" },
+        ],
     },
 };
 
@@ -853,6 +872,7 @@ const INVENTORY_FILTER_META = {
     rmType: { btnId: "rm-type-btn", panelId: "rm-type-panel", optionsId: "rm-type-options" },
     aging: { btnId: "aging-btn", panelId: "aging-panel", optionsId: "aging-options" },
     actionStatus: { btnId: "action-status-btn", panelId: "action-status-panel", optionsId: "action-status-options" },
+    newBatch: { btnId: "new-batch-btn", panelId: "new-batch-panel", optionsId: "new-batch-options" },
 };
 
 // ══════════════════════════════════════════════════════
@@ -1002,6 +1022,8 @@ function _renderFilterOptions(key) {
             const currentOptions = state.inventoryFilterOptions[key] || [];
             if (input.dataset.filterAll === "1") {
                 state.inventoryFilters[key] = [];
+            } else if (key === "newBatch") {
+                state.inventoryFilters[key] = input.checked ? [input.value] : [];
             } else {
                 const set = new Set(_sanitizeFilterValues(state.inventoryFilters[key], currentOptions));
                 if (input.checked) set.add(input.value);
@@ -1178,6 +1200,7 @@ async function loadInventory() {
     const rmTypes    = _getEffectiveFilterValues("rmType");
     const aging      = _getEffectiveFilterValues("aging");
     const actionStatus = _getEffectiveFilterValues("actionStatus");
+    const newBatch   = _getEffectiveFilterValues("newBatch");
     const keyword    = $("keyword").value.trim();
     const month      = $("month-select").value;
     const plantLabel = FRONTEND_FIXED_PLANT;
@@ -1196,6 +1219,7 @@ async function loadInventory() {
     rmTypes.forEach((v) => q.append("category_primary", v));
     aging.forEach((v) => q.append("aging_category", v));
     actionStatus.forEach((v) => q.append("action_status", v));
+    if (newBatch.length === 1) q.set("is_new_batch", newBatch[0]);
     if (keyword)         q.set("keyword", keyword);
 
     try {
@@ -1220,6 +1244,7 @@ function _buildStatsParams() {
     const rmTypes    = _getEffectiveFilterValues("rmType");
     const aging      = _getEffectiveFilterValues("aging");
     const actionStatus = _getEffectiveFilterValues("actionStatus");
+    const newBatch   = _getEffectiveFilterValues("newBatch");
     const keyword    = $("keyword").value.trim();
 
     const q = new URLSearchParams({ snapshot_month: month });
@@ -1228,6 +1253,7 @@ function _buildStatsParams() {
     rmTypes.forEach((v) => q.append("category_primary", v));
     aging.forEach((v) => q.append("aging_category", v));
     actionStatus.forEach((v) => q.append("action_status", v));
+    if (newBatch.length === 1) q.set("is_new_batch", newBatch[0]);
     if (keyword)          q.set("keyword", keyword);
     return q;
 }
@@ -1263,7 +1289,7 @@ async function loadStats() {
 function renderTable() {
     const tbody = $("table-body");
     if (!state.rows.length) {
-        tbody.innerHTML = `<tr><td colspan="30" class="text-center py-20 text-slate-400">暂无匹配数据</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="31" class="text-center py-20 text-slate-400">暂无匹配数据</td></tr>`;
         return;
     }
 
@@ -1278,9 +1304,19 @@ function renderTable() {
     tbody.querySelectorAll("[data-save]").forEach(b => b.onclick = () => saveAction(b.dataset.save));
 }
 
+function formatClaimWeightTons(v) {
+    if (v === null || v === undefined || v === "") return "";
+    const num = Number(v);
+    if (!Number.isFinite(num)) return "";
+    return num.toLocaleString("zh-CN", { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+}
+
 function renderReadRow(row) {
     const weightT = row.weight_kg ? (row.weight_kg / 1000).toFixed(1) : "0.0";
     const plantDisplay = (row.plant === "3000" || row.plant === "3001") ? "KS" : (row.plant === "3301" ? "IDN" : row.plant);
+    const newBadge = row.is_new_batch
+        ? `<span class="ml-1 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">NEW</span>`
+        : "";
     
     return `
         <tr>
@@ -1290,7 +1326,7 @@ function renderReadRow(row) {
             <td>${row.bin_location || ""}</td>
             <td>${row.storage_location || ""}</td>
             <td title="${row.storage_loc_desc}">${row.storage_loc_desc || ""}</td>
-            <td class="font-mono text-blue-600 font-bold bg-blue-50/30">${row.batch_no}</td>
+            <td class="font-mono text-blue-600 font-bold ${row.is_new_batch ? "bg-amber-50/70" : "bg-blue-50/30"}">${row.batch_no}${newBadge}</td>
             <td class="text-right font-bold">${weightT}</td>
             <td>${row.production_date || ""}</td>
             <td>${row.inbound_date || ""}</td>
@@ -1309,6 +1345,7 @@ function renderReadRow(row) {
             <td class="action-col">${row.responsible_dept || ""}</td>
             <td class="action-col">${row.action_plan || ""}</td>
             <td class="action-col">${statusTag(row.action_status)}</td>
+            <td class="action-col text-right">${formatClaimWeightTons(row.claim_weight_tons)}</td>
             <td class="action-col text-right">${row.claim_amount ? row.claim_amount.toLocaleString() : ""}</td>
             <td class="action-col">${row.claim_currency || ""}</td>
             <td class="action-col">${row.expected_completion || ""}</td>
@@ -1347,6 +1384,9 @@ function renderEditRow(row) {
                 <select id="e-status" class="t-input">${opt(statusOptions, currentStatus)}</select>
             </td>
             <td class="action-col">
+                <input id="e-claim-weight" type="number" step="0.001" class="t-input" value="${row.claim_weight_tons ?? ""}">
+            </td>
+            <td class="action-col">
                 <input id="e-amount" type="number" class="t-input" value="${row.claim_amount || ""}">
             </td>
             <td class="action-col">
@@ -1381,6 +1421,7 @@ async function saveAction(batchNo) {
         responsible_dept: $("e-dept").value,
         action_plan: $("e-plan").value,
         action_status: $("e-status").value,
+        claim_weight_tons: $("e-claim-weight").value ? Number($("e-claim-weight").value) : null,
         claim_amount: $("e-amount").value ? Number($("e-amount").value) : null,
         claim_currency: $("e-cur").value || null,
         expected_completion: $("e-date").value || null,
@@ -1747,12 +1788,15 @@ async function openInventoryFromDashboard() {
     state.inventoryFilters.rmType = category ? [category] : [];
     state.inventoryFilters.aging = [];
     state.inventoryFilters.actionStatus = [];
+    state.inventoryFilters.newBatch = [];
     _renderFilterOptions("rmType");
     _renderFilterOptions("aging");
     _renderFilterOptions("actionStatus");
+    _renderFilterOptions("newBatch");
     _updateFilterTriggerLabel("rmType");
     _updateFilterTriggerLabel("aging");
     _updateFilterTriggerLabel("actionStatus");
+    _updateFilterTriggerLabel("newBatch");
 
     state.page = 1;
     showPage("inventory");
@@ -1927,12 +1971,15 @@ $("btn-reset").onclick = () => {
     state.inventoryFilters.rmType = [];
     state.inventoryFilters.aging = [];
     state.inventoryFilters.actionStatus = [];
+    state.inventoryFilters.newBatch = [];
     _renderFilterOptions("rmType");
     _renderFilterOptions("aging");
     _renderFilterOptions("actionStatus");
+    _renderFilterOptions("newBatch");
     _updateFilterTriggerLabel("rmType");
     _updateFilterTriggerLabel("aging");
     _updateFilterTriggerLabel("actionStatus");
+    _updateFilterTriggerLabel("newBatch");
     $("keyword").value         = "";
     $("btn-clear-keyword").classList.add("hidden");
     state.page = 1;
@@ -2144,6 +2191,7 @@ $("btn-toggle-action-import").onclick = () => {
 
 setInventoryFilterOptions("aging", state.inventoryFilterOptions.aging);
 setInventoryFilterOptions("actionStatus", state.inventoryFilterOptions.actionStatus);
+setInventoryFilterOptions("newBatch", state.inventoryFilterOptions.newBatch);
 initInventoryFilterDropdowns();
 
 init();

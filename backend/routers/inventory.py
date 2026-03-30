@@ -54,6 +54,7 @@ def list_inventory(
     category_primary: list[str] | None = Query(None),
     aging_category: list[str] | None = Query(None),
     action_status: list[str] | None = Query(None),
+    is_new_batch: bool | None = None,
     is_abnormal: bool | None = None,
     quality_flag: str | None = None,
     material_code: str | None = None,
@@ -73,6 +74,7 @@ def list_inventory(
         category_primary=category_primary,
         aging_category=aging_category,
         action_status=action_status,
+        is_new_batch=is_new_batch,
         is_abnormal=is_abnormal,
         quality_flag=quality_flag,
         material_code=material_code,
@@ -105,6 +107,7 @@ def get_stats(
     category_primary: list[str] | None = Query(None),
     aging_category: list[str] | None = Query(None),
     action_status: list[str] | None = Query(None),
+    is_new_batch: bool | None = None,
     is_abnormal: bool | None = None,
     keyword: str | None = None,
     db: Session = Depends(get_db),
@@ -143,6 +146,8 @@ def get_stats(
 
     snapshot_rows = base.with_entities(
         snap.batch_no,
+        snap.plant,
+        snap.plant_group,
         snap.weight_kg,
         snap.quality_flag,
         snap.is_abnormal,
@@ -182,6 +187,20 @@ def get_stats(
         status_value = normalize_action_status(action_map.get(normalize_batch_no(row.batch_no)))
         if _status_match(status_value):
             rows_for_total.append((row, status_value))
+
+    previous_month = inventory_service.get_previous_snapshot_month(db, snapshot_month)
+    previous_batch_keys = inventory_service.load_previous_batch_keys(
+        db=db,
+        current_month=snapshot_month,
+        previous_month=previous_month,
+        snapshots=[row for row, _ in rows_for_total],
+    )
+    if is_new_batch is not None:
+        rows_for_total = [
+            (row, status_value)
+            for row, status_value in rows_for_total
+            if inventory_service.is_new_batch_row(row, previous_month, previous_batch_keys) == is_new_batch
+        ]
 
     # 业务口径：总库存不受“异常状态”筛选影响，其它指标继续受异常状态影响
     rows_for_metrics = rows_for_total

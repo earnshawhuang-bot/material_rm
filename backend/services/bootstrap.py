@@ -174,6 +174,12 @@ def ensure_runtime_schema() -> None:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE rm_inventory_snapshot ADD COLUMN plant_group VARCHAR(10)"))
 
+    if "rm_batch_actions" in inspector.get_table_names():
+        action_columns = {col["name"] for col in inspector.get_columns("rm_batch_actions")}
+        if "claim_weight_tons" not in action_columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE rm_batch_actions ADD claim_weight_tons DECIMAL(18, 3) NULL"))
+
 
 def backfill_snapshot_plant_fields(db: Session) -> None:
     """Normalize historical plant values and derive plant_group."""

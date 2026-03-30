@@ -45,6 +45,7 @@ class InventoryFilterParams(BaseModel):
     category_primary: Optional[list[str]] = None   # replaces rm_category for user-facing filter
     aging_category: Optional[list[str]] = None
     action_status: Optional[list[str]] = None
+    is_new_batch: Optional[bool] = None
     is_abnormal: Optional[bool] = None
     quality_flag: Optional[str] = None
     material_code: Optional[str] = None
@@ -94,9 +95,11 @@ class InventoryItem(BaseModel):
     action_plan: Optional[str] = None
     action_status: Optional[str] = None
     remark: Optional[str] = None
+    claim_weight_tons: Optional[float] = None
     claim_amount: Optional[float] = None
     claim_currency: Optional[str] = None
     expected_completion: Optional[date] = None
+    is_new_batch: bool = False
 
     class Config:
         from_attributes = True
@@ -117,6 +120,7 @@ class ActionSaveRequest(BaseModel):
     action_plan: Optional[str] = None
     action_status: str
     remark: Optional[str] = None
+    claim_weight_tons: Optional[float] = None
     claim_amount: Optional[float] = None
     claim_currency: Optional[str] = None
     expected_completion: Optional[date] = None
@@ -130,6 +134,7 @@ class ActionItem(BaseModel):
     action_plan: Optional[str] = None
     action_status: Optional[str] = None
     remark: Optional[str] = None
+    claim_weight_tons: Optional[float] = None
     claim_amount: Optional[float] = None
     claim_currency: Optional[str] = None
     expected_completion: Optional[date] = None

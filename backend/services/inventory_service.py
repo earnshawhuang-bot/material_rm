@@ -11,7 +11,7 @@ from .. import models, schemas
 from .action_service import normalize_action_status
 from .batch_service import normalize_batch_no
 from .material_service import normalize_material_code
-from .plant_service import build_plant_group_expr, normalize_plant_filter
+from .plant_service import build_plant_group_expr, derive_plant_group, normalize_plant_filter
 
 
 def resolve_material_codes_for_categories(
@@ -52,6 +52,63 @@ def resolve_material_codes_for_categories(
         for (raw_code,) in snapshot_codes
         if raw_code and normalize_material_code(raw_code) in mapped_keys
     }
+
+
+def _inventory_plant_scope(plant: str | None, plant_group: str | None) -> str | None:
+    return plant_group or derive_plant_group(plant) or plant
+
+
+def get_previous_snapshot_month(db: Session, current_month: str) -> str | None:
+    return (
+        db.query(models.InventorySnapshot.snapshot_month)
+        .filter(models.InventorySnapshot.snapshot_month < current_month)
+        .distinct()
+        .order_by(models.InventorySnapshot.snapshot_month.desc())
+        .limit(1)
+        .scalar()
+    )
+
+
+def load_previous_batch_keys(
+    db: Session,
+    current_month: str,
+    previous_month: str | None,
+    snapshots: list[models.InventorySnapshot],
+) -> set[tuple[str | None, str]]:
+    if not previous_month or previous_month >= current_month or not snapshots:
+        return set()
+
+    previous_rows = (
+        db.query(
+            models.InventorySnapshot.batch_no,
+            models.InventorySnapshot.plant,
+            models.InventorySnapshot.plant_group,
+        )
+        .filter(models.InventorySnapshot.snapshot_month == previous_month)
+        .all()
+    )
+    return {
+        (
+            _inventory_plant_scope(row.plant, row.plant_group),
+            normalize_batch_no(row.batch_no),
+        )
+        for row in previous_rows
+        if normalize_batch_no(row.batch_no)
+    }
+
+
+def is_new_batch_row(
+    snapshot: models.InventorySnapshot,
+    previous_month: str | None,
+    previous_batch_keys: set[tuple[str | None, str]],
+) -> bool:
+    batch_key = normalize_batch_no(snapshot.batch_no)
+    if not previous_month or not batch_key:
+        return False
+    return (
+        _inventory_plant_scope(snapshot.plant, snapshot.plant_group),
+        batch_key,
+    ) not in previous_batch_keys
 
 
 def list_inventory(
@@ -155,10 +212,35 @@ def list_inventory(
     else:
         query = query.order_by(desc(sort_column))
 
-    total = query.count()
+    previous_month = get_previous_snapshot_month(db, params.snapshot_month)
 
-    offset = (params.page - 1) * params.page_size
-    rows = query.offset(offset).limit(params.page_size).all()
+    if params.is_new_batch is None:
+        total = query.count()
+        offset = (params.page - 1) * params.page_size
+        rows = query.offset(offset).limit(params.page_size).all()
+    else:
+        filtered_rows = query.all()
+        previous_batch_keys = load_previous_batch_keys(
+            db=db,
+            current_month=params.snapshot_month,
+            previous_month=previous_month,
+            snapshots=[snapshot for snapshot, _ in filtered_rows],
+        )
+        filtered_rows = [
+            (snapshot, action)
+            for snapshot, action in filtered_rows
+            if is_new_batch_row(snapshot, previous_month, previous_batch_keys) == params.is_new_batch
+        ]
+        total = len(filtered_rows)
+        offset = (params.page - 1) * params.page_size
+        rows = filtered_rows[offset : offset + params.page_size]
+
+    previous_batch_keys = load_previous_batch_keys(
+        db=db,
+        current_month=params.snapshot_month,
+        previous_month=previous_month,
+        snapshots=[snapshot for snapshot, _ in rows],
+    )
 
     fallback_actions: dict[str, models.BatchAction] = {}
     if any(action is None for _, action in rows):
@@ -219,9 +301,15 @@ def list_inventory(
                 else None
             ),
             remark=action.remark if action else None,
+            claim_weight_tons=(
+                float(action.claim_weight_tons)
+                if action and action.claim_weight_tons is not None
+                else None
+            ),
             claim_amount=float(action.claim_amount) if action and action.claim_amount is not None else None,
             claim_currency=action.claim_currency if action else None,
             expected_completion=action.expected_completion if action else None,
+            is_new_batch=is_new_batch_row(snapshot, previous_month, previous_batch_keys),
         )
         items.append(item)
     return items, total

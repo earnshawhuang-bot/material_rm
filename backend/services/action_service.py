@@ -74,6 +74,7 @@ def save_or_update_action(
     action.action_plan = payload.action_plan
     action.action_status = normalize_action_status(payload.action_status)
     action.remark = payload.remark
+    action.claim_weight_tons = payload.claim_weight_tons
     action.claim_amount = payload.claim_amount
     action.claim_currency = payload.claim_currency
     action.expected_completion = payload.expected_completion
@@ -160,6 +161,7 @@ def carry_forward_actions(db: Session, new_month: str) -> dict:
                 action_plan=act.action_plan,
                 action_status=normalize_action_status(act.action_status),
                 remark=act.remark,
+                claim_weight_tons=act.claim_weight_tons,
                 claim_amount=act.claim_amount,
                 claim_currency=act.claim_currency,
                 expected_completion=act.expected_completion,
@@ -225,6 +227,11 @@ def _parse_claim_amount(raw: Any) -> float | None:
         return val if val != 0 else None
     except (TypeError, ValueError):
         return None
+
+
+def _parse_claim_weight_tons(raw: Any) -> float | None:
+    """Parse claim tons, return None when invalid or empty."""
+    return _parse_claim_amount(raw)
 
 
 def _parse_expected_date(raw: Any) -> tuple[date | None, str | None]:
@@ -296,6 +303,8 @@ def _merge_action_fill_blanks(target: models.BatchAction, source: models.BatchAc
         target.action_status = target_status
     if not target.remark and source.remark:
         target.remark = source.remark
+    if target.claim_weight_tons is None and source.claim_weight_tons is not None:
+        target.claim_weight_tons = source.claim_weight_tons
     if target.claim_amount is None and source.claim_amount is not None:
         target.claim_amount = source.claim_amount
     if not target.claim_currency and source.claim_currency:
@@ -411,6 +420,9 @@ def import_actions_from_excel(
             plan = _safe_str(row.get("处理方案"))
             raw_status = _safe_str(row.get("处理状态"))
             mapped_status, status_note = _map_status(raw_status)
+            claim_weight_tons = _parse_claim_weight_tons(
+                row.get("索赔吨数") or row.get("索赔重量")
+            )
             claim = _parse_claim_amount(row.get("索赔金额"))
             claim_cur = _safe_str(row.get("币种"))
             exp_date, date_note = _parse_expected_date(row.get("预计完成时间"))
@@ -438,6 +450,8 @@ def import_actions_from_excel(
                     act.action_status = normalize_action_status(act.action_status)
                 if not act.reason_note and reason_note:
                     act.reason_note = reason_note
+                if act.claim_weight_tons is None and claim_weight_tons is not None:
+                    act.claim_weight_tons = claim_weight_tons
                 if act.claim_amount is None and claim is not None:
                     act.claim_amount = claim
                 if not act.claim_currency and claim_cur:
@@ -455,6 +469,7 @@ def import_actions_from_excel(
                     action_plan=plan,
                     action_status=mapped_status,
                     reason_note=reason_note,
+                    claim_weight_tons=claim_weight_tons,
                     claim_amount=claim,
                     claim_currency=claim_cur,
                     expected_completion=exp_date,

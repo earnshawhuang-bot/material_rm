@@ -79,6 +79,7 @@ class BatchAction(Base):
     action_plan: Mapped[str | None] = mapped_column(String(500), nullable=True)
     action_status: Mapped[str | None] = mapped_column(String(20), default="待定")
     remark: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    claim_weight_tons: Mapped[float | None] = mapped_column(DECIMAL(18, 3), nullable=True)
     claim_amount: Mapped[float | None] = mapped_column(DECIMAL(18, 2), nullable=True)
     claim_currency: Mapped[str | None] = mapped_column(String(5), nullable=True)
     expected_completion: Mapped[date | None] = mapped_column(Date, nullable=True)
